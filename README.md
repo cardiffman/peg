@@ -8,10 +8,10 @@ parser.
 
 In general what we have here is 
 
-ParserBase -- anything that recognizes some text.
-ParseState -- A state of parsing.
-ParseResult -- A result of parsing
-AST -- Abstract Syntax Tree node
+* ParserBase -- anything that recognizes some text.
+* ParseState -- A state of parsing.
+* ParseResult -- A result of parsing
+* AST -- Abstract Syntax Tree node
 
 In this code I use shared_ptr for all of the above except AST currently. So
 there are definitely leaks of AST's. The shared_ptr's have typedefs xxxPtr. This
@@ -72,9 +72,10 @@ combinators it is referred to as a parser combinator library.
 In the subject area of parsing, a grammar can be written in a language of 
 terminal symbols, non-terminal symbols, and operators symbolized with *, +, /, 
 ?, &; and ! combined into expressions. This formalism is called Parsing 
-Expression Grammars which is the real reason this experiment is called Peg. There
-is no operator that corresponds to sequencing two parsers, they are just written
-in the expression in the order they should be recognized in.
+Expression Grammars which is the real reason this experiment is called Peg. In 
+the standard notation for PEG there is no operator that corresponds to 
+sequencing two parsers, they are just written in the expression in the order 
+they should be recognized in.
 
 Occasionally a form of recursion crops up in a grammar that cannot be resolved
 by refactoring the grammar. The parser ParserReference is used in such a case.
