@@ -82,6 +82,7 @@ In use the ParserReference is constructed, and used as if it was the full
 embodiment of its production. At some point an expression is written that does
 embody the production. At that time the ParserReference is resolved with the
 result of that expression. For example:
+
     auto expr = make_shared<ParserReference>();
     auto op = Choice(plus,asterisk,slash,minus);
     auto exprDef = Choice(WSequence(lparen,expr,rparen), RLoop(literal,op));
