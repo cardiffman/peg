@@ -80,6 +80,7 @@ public:
 	  memos[make_pair(index, id)] = c;
 	}
 
+	static void reset() { memos = Memos(); }
 private:
 	size_t index;
 	string& input;
@@ -454,36 +455,6 @@ shared_ptr<ParserBase> Repeat1(const string& name, const shared_ptr<ParserBase>&
 	return shared_ptr<ParserBase>(new repeat1(name, parser));
 }
 #endif
-#if 0
-template <typename Parser> struct repeat0 : public ParserBase
-{
-  repeat0(const shared_ptr<Parser>& next) : next(next) {}
-  shared_ptr<Parser> next;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	SequenceAST* ast = new SequenceAST;
-	ParseResultPtr rep = (*next)(start);
-	if (!rep)
-	{
-		return make_shared<ParseResult>(start, ast);
-	}
-	ast->append(rep->ast);
-	ParseResultPtr rep2 = (*next)(rep->remaining);
-	while (rep2)
-	{
-		ast->append(rep2->ast);
-		rep = rep2;
-		rep2 = (*next)(rep2->remaining);
-	}
-	cout <<  __FUNCTION__<< ' ' << rep->remaining->substr(0) << endl;
-	return make_shared<ParseResult>(rep->remaining, ast);
-  }
-};
-template <typename Parser> repeat0<Parser> Repeat0(const shared_ptr<Parser>& parser)
-{
-	return make_shared<repeat0<Parser>>(parser);
-}
-#else
 template <typename Parser> struct repeat0 : public ParserBase
 {
   repeat0(const shared_ptr<Parser>& next) : next(next) {}
@@ -510,10 +481,8 @@ template <typename Parser> struct repeat0 : public ParserBase
 };
 shared_ptr<ParserBase> Repeat0(const shared_ptr<ParserBase>& parser)
 {
-	//return make_shared<repeat0<ParserBase>>(parser);
 	return shared_ptr<ParserBase>(new repeat0<ParserBase>(parser));
 }
-#endif
 
 template <typename Parser> struct optional : public ParserBase
 {
@@ -579,517 +548,6 @@ template <typename Parser> ParseResultPtr skipwhite(const ParseStatePtr& start, 
 	return (*next)(nonblank);
 }
 
-template <typename Parser1, typename Parser2> struct choice2 : public ParserBase
-{
-  choice2(const string& name, const shared_ptr<Parser1>& next1, const shared_ptr<Parser2>& next2) : name(name), next1(next1), next2(next2) {}
-  //choice2(Parser1& n1, Parser2& n2) : next1(make_shared<Parser1>(n1)), next2(make_shared<Parser2>(n2)) {}
-  string name;
-  shared_ptr<Parser1> next1;
-  shared_ptr<Parser2> next2;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	Parser1* pn1 = next1.get();
-	ParseResultPtr r = (*next1)(t1);
-	if (!r)
-		r = (*next2)(t1);
-	if (!r)
-	{
-		cout << name << " fail " << t1->substr(0) << ' ' << __LINE__ << endl;
-		return r;
-	}
-	cout << name << " [" << r->remaining->substr(0) << ']' << endl;
-	return r;
-  }
-};
-
-template <typename Parser1, typename Parser2, typename Parser3> struct choice3 : public ParserBase
-{
-  choice3(const string& name, const shared_ptr<Parser1>& next1, const shared_ptr<Parser2>& next2, const shared_ptr<Parser3>& next3) : name(name), next1(next1), next2(next2), next3(next3) {}
-  string name;
-  shared_ptr<Parser1> next1;
-  shared_ptr<Parser2> next2;
-  shared_ptr<Parser3> next3;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = (*next1)(t1);
-	if (!r)
-		r = (*next2)(t1);
-	if (!r)
-		r = (*next3)(t1);
-	if (!r)
-		return r;
-	cout << name << ' '<< r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-template <typename Parser1, typename Parser2> struct sequence2 : public ParserBase
-{
-  sequence2(const shared_ptr<Parser1>& next1, const shared_ptr<Parser2>& next2) : next1(next1), next2(next2) {}
-  shared_ptr<Parser1> next1;
-  shared_ptr<Parser2> next2;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = (*next1)(t1);
-	if (!r)
-		return r;
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = (*next2)(t1);
-	if (!r)
-		return r;
-	ast->append(r->ast);
-	r->ast = ast;
-	cout << __FUNCTION__<< ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-template <typename Parser1, typename Parser2> struct wsequence2 : public ParserBase
-{
-  wsequence2(const string& name, const shared_ptr<Parser1>& next1, const shared_ptr<Parser2>& next2) : name(name), next1(next1), next2(next2) {}
-  string name;
-  shared_ptr<Parser1> next1;
-  shared_ptr<Parser2> next2;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = skipwhite(t1, next1);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next2);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	ast->append(r->ast);
-	r->ast = ast;
-	cout << name << ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-
-template <typename Parser1, typename Parser2, typename Parser3> struct wsequence3 : public ParserBase
-{
-  wsequence3(const string& name, const shared_ptr<Parser1>& next1, const shared_ptr<Parser2>& next2, const shared_ptr<Parser3>& next3) : name(name), next1(next1), next2(next2), next3(next3) {}
-  string name;
-  shared_ptr<Parser1> next1;
-  shared_ptr<Parser2> next2;
-  shared_ptr<Parser3> next3;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r =0;
-	r = skipwhite(t1, next1);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next2);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next3);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	ast->append(r->ast);
-	cout << name << ' ' << r->remaining->substr(0) << endl;
-	r->ast = ast;
-	return r;
-  }
-};
-
-template <typename Parser1, typename Parser2, typename Parser3, typename Parser4> struct wsequence4 : public ParserBase
-{
-	typedef shared_ptr<Parser1> Parser1Ptr;
-	typedef shared_ptr<Parser2> Parser2Ptr;
-	typedef shared_ptr<Parser3> Parser3Ptr;
-	typedef shared_ptr<Parser4> Parser4Ptr;
-  wsequence4(const string& name, const Parser1Ptr& next1, const Parser2Ptr& next2, const Parser3Ptr& next3, const Parser4Ptr& next4) 
-	: name(name), next1(next1), next2(next2), next3(next3), next4(next4) {}
-  string name;
-  Parser1Ptr next1;
-  Parser2Ptr next2;
-  Parser3Ptr next3;
-  Parser4Ptr next4;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = skipwhite(t1, next1);
-	if (!r)
-	{
-		if (name=="lambdaabs")
-			cout << __FUNCTION__ << ' ';
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	if (name=="lambdaabs")
-		cout << name << ' ' << *ast << endl;
-	t1 = r->remaining;
-	r = skipwhite(t1, next2);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	ast->append(r->ast);
-	if (name=="lambdaabs")
-		cout << name << ' ' << *ast << endl;
-	t1 = r->remaining;
-	r = skipwhite(t1, next3);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	ast->append(r->ast);
-	if (name=="lambdaabs")
-		cout << name << ' ' << *ast << endl;
-	t1 = r->remaining;
-	r = skipwhite(t1, next4);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	ast->append(r->ast);
-	if (name=="lambdaabs")
-		cout << name << ' ' << *ast << endl;
-	r->ast = ast;
-	cout << name << ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-template <typename Parser1, typename Parser2, typename Parser3, typename Parser4, typename Parser5> struct wsequence5 : public ParserBase
-{
-	typedef shared_ptr<Parser1> Parser1Ptr;
-	typedef shared_ptr<Parser2> Parser2Ptr;
-	typedef shared_ptr<Parser3> Parser3Ptr;
-	typedef shared_ptr<Parser4> Parser4Ptr;
-	typedef shared_ptr<Parser5> Parser5Ptr;
-  wsequence5(const string& name,const Parser1Ptr& next1, const Parser2Ptr& next2, const Parser3Ptr& next3, const Parser4Ptr& next4, const Parser5Ptr& next5) 
-	: name(name),next1(next1), next2(next2), next3(next3), next4(next4), next5(next5) {}
-  string name;
-  Parser1Ptr next1;
-  Parser2Ptr next2;
-  Parser3Ptr next3;
-  Parser4Ptr next4;
-  Parser5Ptr next5;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = skipwhite(t1, next1);
-	if (!r)
-	  return r;
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next2);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next3);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next4);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next5);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	r->ast = ast;
-	cout <<  name << " [" << r->remaining->substr(0) << ']' << endl;
-	return r;
-  }
-};
-template <typename Parser1, typename Parser2, typename Parser3, typename Parser4, typename Parser5, typename Parser6> struct wsequence6 : public ParserBase
-{
-	typedef shared_ptr<Parser1> Parser1Ptr;
-	typedef shared_ptr<Parser2> Parser2Ptr;
-	typedef shared_ptr<Parser3> Parser3Ptr;
-	typedef shared_ptr<Parser4> Parser4Ptr;
-	typedef shared_ptr<Parser5> Parser5Ptr;
-	typedef shared_ptr<Parser5> Parser6Ptr;
-  wsequence6(const string& name, const Parser1Ptr& next1, const Parser2Ptr& next2, const Parser3Ptr& next3, const Parser4Ptr& next4, const Parser5Ptr& next5, const Parser6Ptr& next6) 
-	: name(name), next1(next1), next2(next2), next3(next3), next4(next4), next5(next5), next6(next6) {}
-  string name;
-  Parser1Ptr next1;
-  Parser2Ptr next2;
-  Parser3Ptr next3;
-  Parser4Ptr next4;
-  Parser5Ptr next5;
-  Parser6Ptr next6;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = skipwhite(t1, next1);
-	if (!r)
-	  return r;
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next2);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next3);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next4);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next5);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next6);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	r->ast = ast;
-	cout << name << ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-template <typename Parser1, typename Parser2, typename Parser3> struct sequence3 : public ParserBase
-{
-  sequence3(Parser1& next1, Parser2& next2, Parser3& next3) : next1(next1), next2(next2), next3(next3) {}
-  Parser1& next1;
-  Parser2& next2;
-  Parser3& next3;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = next1(t1);
-	if (!r)
-	  return r;
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = next2(t1);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = next3(t1);
-	if (!r)
-	  return r;
-	ast->append(r->ast);
-	r->ast = ast;
-	cout << __FUNCTION__<< ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-template <typename Parser1, typename Parser2, typename Parser3, typename Parser4> struct sequence4 : public ParserBase
-{
-  sequence4(Parser1& next1, Parser2& next2, Parser3& next3, Parser4& next4) : next1(next1), next2(next2), next3(next3), next4(next4) {}
-  Parser1 next1;
-  Parser2 next2;
-  Parser3 next3;
-  Parser4 next4;
-  ParseResult* parse(ParseState* start)
-  {
-	ParseState* t1 = start;
-	ParseResult* r =0;
-	r = next1(t1);
-	if (!r)
-	  return r;
-	AST* ast = new AST;
-	ast->ast.push_back(r->ast);
-	t1 = r->remaining;
-	r = next2(t1);
-	if (!r)
-	  return r;
-	ast->ast.push_back(r->ast);
-	t1 = r->remaining;
-	r = next3(t1);
-	if (!r)
-	  return r;
-	ast->ast.push_back(r->ast);
-	t1 = r->remaining;
-	r = next4(t1);
-	if (!r)
-	  return r;
-	ast->ast.push_back(r->ast);
-	r->ast = ast;
-	cout << __FUNCTION__<< ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-
-template <typename Parser1, typename Parser2, typename Parser3, typename Parser4> struct choice4 : public ParserBase
-{
-	typedef shared_ptr<Parser1> Parser1Ptr;
-	typedef shared_ptr<Parser2> Parser2Ptr;
-	typedef shared_ptr<Parser3> Parser3Ptr;
-	typedef shared_ptr<Parser4> Parser4Ptr;
-  choice4(const string& name, const Parser1Ptr& next1, const Parser2Ptr& next2, const Parser3Ptr& next3, const Parser4Ptr& next4) 
-	  : name(name), next1(next1), next2(next2), next3(next3), next4(next4) {}
-  string name;
-  Parser1Ptr next1;
-  Parser2Ptr next2;
-  Parser3Ptr next3;
-  Parser4Ptr next4;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = (*next1)(t1);
-	if (!r)
-	  r = (*next2)(t1);
-	if (!r)
-	  r = (*next3)(t1);
-	if (!r)
-	  r = (*next4)(t1);
-	if (!r)
-	{
-		cout << name << " fail "<< t1->substr(0) << ' ' << __LINE__ << endl;
-		return r;
-	}
-	cout << name << ' '<< r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-#if 1
-template <typename Parser1, typename Parser2, typename Parser3, typename Parser4, typename Parser5> struct choice5 : public ParserBase
-{
-	typedef shared_ptr<Parser1> Parser1Ptr;
-	typedef shared_ptr<Parser2> Parser2Ptr;
-	typedef shared_ptr<Parser3> Parser3Ptr;
-	typedef shared_ptr<Parser4> Parser4Ptr;
-	typedef shared_ptr<Parser5> Parser5Ptr;
-	choice5(const string& name, const Parser1Ptr& next1, const Parser2Ptr& next2, const Parser3Ptr& next3, const Parser4Ptr& next4, const Parser5Ptr& next5) 
-	  : name(name), next1(next1), next2(next2), next3(next3), next4(next4), next5(next5) {}
-	string name;
-  Parser1Ptr next1;
-  Parser2Ptr next2;
-  Parser3Ptr next3;
-  Parser4Ptr next4;
-  Parser5Ptr next5;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = (*next1)(t1);
-	if (!r)
-	  r = (*next2)(t1);
-	if (!r)
-	  r = (*next3)(t1);
-	if (!r)
-	  r = (*next4)(t1);
-	if (!r)
-	  r = (*next5)(t1);
-	if (!r)
-	{
-		cout << name << " fail " << t1->substr(0) << ' ' << __LINE__ << endl;
-		return r;
-	}
-	cout << name <<' '<< r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-
-struct Choices : public ParserBase
-{
-	typedef shared_ptr<ParserBase> ParserPtr;
-	Choices(const string& name): name(name) {}
-	string name;
-	typedef vector<ParserPtr> Parsers;
-	vector<ParserPtr> choices;
-	ParseResultPtr parse(const ParseStatePtr& start)
-	{
-		ParseStatePtr t1 = start;
-		ParseResultPtr r = 0;
-		Parsers::const_iterator i = choices.begin();
-		while (r == 0 && i != choices.end())
-		{
-			ParserPtr parser = *i;
-			r = (*parser)(t1);
-			++i;
-		}
-		if (!r)
-		{
-			cout << name << " fail " << t1->substr(0) << ' ' << __LINE__ << endl;
-			return r;
-		}
-		cout << name <<' '<< r->remaining->substr(0) << endl;
-		return r;
-	}
-};
-
-#if 0
-template <typename Parser1, typename Parser2> struct wsequence2 : public ParserBase
-{
-  wsequence2(const string& name, const shared_ptr<Parser1>& next1, const shared_ptr<Parser2>& next2) : name(name), next1(next1), next2(next2) {}
-  string name;
-  shared_ptr<Parser1> next1;
-  shared_ptr<Parser2> next2;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = skipwhite(t1, next1);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	SequenceAST* ast = new SequenceAST;
-	ast->append(r->ast);
-	t1 = r->remaining;
-	r = skipwhite(t1, next2);
-	if (!r)
-	{
-		cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << endl;
-		return r;
-	}
-	ast->append(r->ast);
-	r->ast = ast;
-	cout << name << ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
-#endif
-
 struct WSequenceN : public ParserBase
 {
 	typedef shared_ptr<ParserBase> ParserPtr;
@@ -1125,41 +583,76 @@ struct WSequenceN : public ParserBase
 	}
 };
 
-#else
-struct choice5 : public ParserBase
+struct Choices : public ParserBase
 {
-	choice5(const string& name, const ParserPtr& next1, const ParserPtr& next2, const ParserPtr& next3, const ParserPtr& next4, const ParserPtr& next5) 
-	  : name(name), next1(next1), next2(next2), next3(next3), next4(next4), next5(next5) {}
-  string name;
-  ParserPtr next1;
-  ParserPtr next2;
-  ParserPtr next3;
-  ParserPtr next4;
-  ParserPtr next5;
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = (*next1)(t1);
-	if (!r)
-	  r = (*next2)(t1);
-	if (!r)
-	  r = (*next3)(t1);
-	if (!r)
-	  r = (*next4)(t1);
-	if (!r)
-	  r = (*next5)(t1);
-	if (!r)
+	typedef shared_ptr<ParserBase> ParserPtr;
+	Choices(const string& name): name(name) {}
+	string name;
+	typedef vector<ParserPtr> Parsers;
+	vector<ParserPtr> choices;
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-		//cout << name << " fail " << t1->substr(0) << ' ' << __LINE__ << endl;
+		ParseStatePtr t1 = start;
+		ParseResultPtr r = 0;
+		Parsers::const_iterator i = choices.begin();
+		while (r == 0 && i != choices.end())
+		{
+			ParserPtr parser = *i;
+			r = (*parser)(t1);
+			++i;
+		}
+		if (!r)
+		{
+			cout << name << " fail " << t1->substr(0) << ' ' << __LINE__ << endl;
+			return r;
+		}
+		cout << name <<' '<< r->remaining->substr(0) << endl;
 		return r;
 	}
-	cout << name << ' '<< r->remaining->substr(0) << endl;
-	return r;
-  }
 };
-#endif
 
-#if 1
+
+template <typename Parser1, typename Parser2> shared_ptr<Choices> operator||(const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2) {
+	auto r = make_shared<Choices>("||");
+	r->choices.push_back(parser1);
+	r->choices.push_back(parser2);
+	return r;
+}
+template <typename Parser1> shared_ptr<Choices> operator||(const shared_ptr<Choices>& c, const shared_ptr<Parser1>& parser1) {
+	auto r = c;
+	r->choices.push_back(parser1);
+	return r;
+}
+shared_ptr<Choices> operator||(const shared_ptr<Choices>& c, const string& name) {
+	auto r = c;
+	r->name = name;
+	return r;
+}
+shared_ptr<Choices> operator||(const string& name, const shared_ptr<Choices>& c) {
+	auto r = c;
+	r->name = name;
+	return r;
+}
+#if 0
+template <typename Parser1> shared_ptr<Choices> operator||(const string& name, const shared_ptr<Parser1>& parser1) {
+	auto r = make_shared<Choices>(name);
+	r->name = name;
+	r->choices.push_back(parser1);
+	return r;
+}
+#endif
+template <typename Parser1, typename Parser2> shared_ptr<WSequenceN> operator&&(const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2) {
+	auto r = make_shared<WSequenceN>("&&");
+	r->elements.push_back(parser1);
+	r->elements.push_back(parser2);
+	return r;;
+}
+template <typename Parser1> shared_ptr<WSequenceN> operator&&(const shared_ptr<WSequenceN> s, const shared_ptr<Parser1>& parser1) {
+	auto r = s;
+	r->elements.push_back(parser1);
+	return r;;
+}
+
 void foo()
 {
   auto kw = make_shared<token>("kw");
@@ -1170,42 +663,25 @@ void foo()
   typedef Skipwhite<token> SWToken;
   SWToken swToken(kw);
   pr = swToken(0);
-  typedef sequence2<token,token> TokenToken;
-  TokenToken tokens2(kw,kw);
-  pr = tokens2(0);
+  auto tokens2 = kw && kw;
+  pr = (*tokens2)(0);
 }
-#endif
 
-#if 1
-template <typename Parser1, typename Parser2> shared_ptr<choice2<Parser1,Parser2>> operator||(const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2) {
-  return make_shared<choice2<Parser1,Parser2>>("||",parser1,parser2);
-}
-template <typename Parser1, typename Parser2> shared_ptr<sequence2<Parser1,Parser2>> operator&&(const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2) {
-  return make_shared<sequence2<Parser1,Parser2>>(parser1,parser2);
-}
-template <typename Parser1> repeat0<Parser1> operator*(const shared_ptr<Parser1>& parser1) {
-	return repeat0<Parser1>(parser1);
-}
-#endif
-#if 1
 shared_ptr<ParserBase> x()
 {
-  //return trange<'0','9'>() || trange<'a','z'>() || trange<'A','Z'>();
 	auto digits = make_shared<trange<'0','9'>>();// digits;
 	auto lc = make_shared<trange<'a','z'>>();// lc;
 	auto uc = make_shared<trange<'A','Z'>>();// uc;
-  //static auto p = *(trange<'0','9'>() || trange<'a','z'>() || trange<'A','Z'>());
 	auto p = Repeat0(digits || lc || uc);
-  //static choice2<choice2<trange<'0','9'>,trange<'a','z'> >,trange<'A','Z'> > p = digits || lc || uc;
-  return p;
+	return p;
 }
-#endif
+
 template <typename a> 
 Skipwhite<a> whiteskip(a p) 
 { 
 	return Skipwhite<a>(p); 
 }
-#if 1
+
 shared_ptr<ParserBase> y()
 {
 	ID anID; NUM aNUM;
@@ -1217,7 +693,7 @@ shared_ptr<ParserBase> y()
 	static auto p = SkipWhite(id) && Repeat0(SkipWhite(id)) && SkipWhite(make_shared<tch<'='>>()) && rhs;
 	return p;
 }
-#endif
+
 /**
 * ParserReference allows us to resolve a circular grammer such as the typical
 * parenthesized expression grammer using an after-the-fact resolution.
@@ -1238,45 +714,6 @@ struct ParserReference : public ParserBase
   shared_ptr<ParserBase> resolution;
 };
 
-struct OldRLoop : public ParserBase 
-{
-  OldRLoop(shared_ptr<ParserBase> item, shared_ptr<ParserBase> join) : item(item), join(join) {}
-  shared_ptr<ParserBase> item;
-  shared_ptr<ParserBase> join;
-  ParseResultPtr parse(const ParseStatePtr& start) {
-	ParseStatePtr t1 = start;
-	ParseResultPtr r = skipwhite(t1, item);
-	if (!r)
-	  return r;
-	SequenceAST* ast = new SequenceAST;
-	while (r)
-	{
-	  ast->append(r->ast);
-	  t1 = r->remaining;
-	  ParseResultPtr joinResult = skipwhite(t1, join);
-	  if (!joinResult)
-	  {
-		// This is fine, the sequence has ended.
-		r->ast = ast;
-		cout << __FUNCTION__<< ' ' << r->remaining->substr(0) << endl;
-		return r;
-	  }
-	  r = joinResult;
-	  ast->append(r->ast);
-	  t1 = r->remaining;
-	  r = skipwhite(t1, item);
-	  if (!r)
-	  {
-		cout << __FUNCTION__<< " fail " << t1->substr(0) << ' ' << __LINE__<< endl;
-		return r; // This means something like "a, a, a, " happened which is not always okay.
-	  }
-	}
-	ast->append(r->ast);
-	r->ast = ast;
-	cout << __FUNCTION__<< ' ' << r->remaining->substr(0) << endl;
-	return r;
-  }
-};
 template <typename Item, typename Join, bool endsWithJoin=false>
 	struct rLoop : public ParserBase 
 {
@@ -1334,86 +771,46 @@ template <typename Item, typename Join, bool endsWithJoin=false>
 };
 #if 0
 	template <typename Parser1, typename Parser2> 
-		shared_ptr<ParserBase> 
-			WSequence(const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2)
-	{
-		return shared_ptr<ParserBase>(new wsequence2<Parser1,Parser2>(parser1,parser2));
-	}
-#else
-	template <typename Parser1, typename Parser2> 
-		shared_ptr<wsequence2<Parser1,Parser2>> 
-			WSequence(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2)
-	{
-		return make_shared<wsequence2<Parser1,Parser2>>(name,parser1,parser2);
-	}
-#endif
-	template <typename P1, typename P2, typename P3> 
-		shared_ptr<wsequence3<P1,P2,P3>> 
-			WSequence(const string& name, const shared_ptr<P1>& parser1, const shared_ptr<P2>& parser2, const shared_ptr<P3>& parser3)
-	{
-		return make_shared<wsequence3<P1,P2,P3>>(name,parser1,parser2,parser3);
-	}
-	template <typename P1, typename P2, typename P3, typename P4> 
-		shared_ptr<wsequence4<P1,P2,P3,P4>> 
-			WSequence(const string& name, const shared_ptr<P1>& parser1, const shared_ptr<P2>& parser2, const shared_ptr<P3>& parser3, const shared_ptr<P4>& parser4)
-	{
-		return make_shared<wsequence4<P1,P2,P3,P4>>(name,parser1,parser2,parser3,parser4);
-	}
-#if 0
-	template <typename Parser1, typename Parser2, typename Parser3, typename Parser4, typename Parser5> 
-		shared_ptr<wsequence5<Parser1,Parser2,Parser3,Parser4,Parser5>> 
-			WSequence(const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3, const shared_ptr<Parser4>& parser4, const shared_ptr<Parser5>& parser5)
-	{
-		return make_shared<wsequence6<Parser1,Parser2,Parser3,Parser4,Parser5,Parser6>>(name,parser1,parser2,parser3,parser4,parser5);
-	}
-	template <typename Parser1, typename Parser2, typename Parser3, typename Parser4, typename Parser5, typename Parser6> 
-		shared_ptr<wsequence5<Parser1,Parser2,Parser3,Parser4,Parser5,Parser6>> 
-			WSequence(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3, const shared_ptr<Parser4>& parser4, const shared_ptr<Parser5>& parser5, const shared_ptr<Parser6>& parser6)
-	{
-		return make_shared<wsequence6<Parser1,Parser2,Parser3,Parser4,Parser5,Parser6>>(name,parser1,parser2,parser3,parser4,parser5,parser6);
-	}
-#else
-		shared_ptr<wsequence5<ParserBase,ParserBase,ParserBase,ParserBase,ParserBase>> 
-			WSequence(const string& name,const ParserPtr& parser1, const ParserPtr& parser2, const ParserPtr& parser3, const ParserPtr& parser4, const ParserPtr& parser5)
-	{
-		return make_shared<wsequence5<ParserBase,ParserBase,ParserBase,ParserBase,ParserBase>>(name,parser1,parser2,parser3,parser4,parser5);
-	}
-		shared_ptr<wsequence6<ParserBase,ParserBase,ParserBase,ParserBase,ParserBase,ParserBase>> 
-			WSequence(const string& name, const ParserPtr& parser1, const ParserPtr& parser2, const ParserPtr& parser3, const ParserPtr& parser4, const ParserPtr& parser5, const ParserPtr& parser6)
-	{
-		return make_shared<wsequence6<ParserBase,ParserBase,ParserBase,ParserBase,ParserBase,ParserBase>>(name,parser1,parser2,parser3,parser4,parser5,parser6);
-	}
-#endif
-	template <typename Parser1, typename Parser2> 
-		shared_ptr<choice2<Parser1,Parser2>> 
+		shared_ptr<Choices> 
 			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2)
 	{
-		return make_shared<choice2<Parser1,Parser2>>(name, parser1,parser2);
+		auto r = make_shared<Choices>(name);
+		r->choices.push_back(parser1);
+		r->choices.push_back(parser2);
+		return r;
 	}
 	template <typename Parser1, typename Parser2, typename Parser3> 
-		shared_ptr<choice3<Parser1,Parser2,Parser3>> 
+		shared_ptr<Choices> 
 			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3)
 	{
-		return make_shared<choice3<Parser1,Parser2,Parser3>>(name, parser1,parser2,parser3);
+		auto r = make_shared<Choices>(name);
+		r->choices.push_back(parser1);
+		r->choices.push_back(parser2);
+		r->choices.push_back(parser3);
+		return r;
 	}
 	template <typename Parser1, typename Parser2, typename Parser3, typename Parser4> 
-		shared_ptr<choice4<Parser1,Parser2,Parser3,Parser4>> 
+		shared_ptr<Choices> 
 			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3, const shared_ptr<Parser4>& parser4)
 	{
-		return make_shared<choice4<Parser1,Parser2,Parser3,Parser4>>(name, parser1,parser2,parser3,parser4);
+		auto r = make_shared<Choices>(name);
+		r->choices.push_back(parser1);
+		r->choices.push_back(parser2);
+		r->choices.push_back(parser3);
+		r->choices.push_back(parser4);
+		return r;
 	}
-#if 1
 	template <typename Parser1, typename Parser2, typename Parser3, typename Parser4, typename Parser5> 
-		shared_ptr<choice5<Parser1,Parser2,Parser3,Parser4,Parser5> >
+		shared_ptr<Choices> 
 			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3, const shared_ptr<Parser4>& parser4, const shared_ptr<Parser5>& parser5)
 	{
-		return make_shared<choice5<Parser1,Parser2,Parser3,Parser4,Parser5>>(name, parser1,parser2,parser3,parser4,parser5);
-	}
-#else
-	ParserPtr
-			Choice(const string& name, const ParserPtr& parser1, const ParserPtr& parser2, const ParserPtr& parser3, const ParserPtr& parser4, const ParserPtr& parser5)
-	{
-		return ParserPtr(new choice5(name, parser1,parser2,parser3,parser4,parser5));
+		auto r = make_shared<Choices>(name);
+		r->choices.push_back(parser1);
+		r->choices.push_back(parser2);
+		r->choices.push_back(parser3);
+		r->choices.push_back(parser4);
+		r->choices.push_back(parser5);
+		return r;
 	}
 #endif
 	template <typename P1, typename P2>
@@ -1430,23 +827,15 @@ template <typename Item, typename Join, bool endsWithJoin=false>
 		}
 
 #if 1
-	//ID idparse;
-		auto idparse = make_shared<ID>();
-	//NUM numparse;
-		auto numparse = make_shared<NUM>();
-	//tch<'='> equals;
-		auto equals = make_shared<tch<'='>>();
-	//tch<'+'> plus;
+	auto idparse = make_shared<ID>();
+	auto numparse = make_shared<NUM>();
+	auto equals = make_shared<tch<'='>>();
 	auto plus = make_shared<tch<'+'>>();
-	//tch<'*'> times;
 	auto times = make_shared<tch<'*'>>();
-	//typedef sequence3<tch<'('>, ParserReference, tch<')'> > Parenthesized;
-	extern ParserBase* pRhs;
-	tch<'('> leftParen; tch<')'> rightParen;
-	auto rhsRef = make_shared<ParserReference>();//ParserReference rhsRef;
-	//Parenthesized parenthesized(leftParen, rhsRef, rightParen);
-	auto parenthesized = WSequence("parenthesized",make_shared<tch<'('>>(),rhsRef,make_shared<tch<')'>>());
-	typedef wsequence2<ID, repeat0<Skipwhite<ParserReference> > > Application;
+	auto leftParen = make_shared<tch<'('>>();
+	auto rightParen = make_shared<tch<')'>>();
+	auto rhsRef = make_shared<ParserReference>();
+	auto parenthesized = (make_shared<WSequenceN>("parenthesized") && leftParen && rhsRef && rightParen);
 	// Application of a function is a sequence, starting with an id, of Factor's.
 	// E.g. "sqr cos x" does the square of the cosine of x.
 	// E.g. hypot o a = sqrt (sqr o + sqr a)
@@ -1456,21 +845,14 @@ template <typename Item, typename Join, bool endsWithJoin=false>
 	// An id can be treated as a zero-arity function that always returns the same thing.
 	// Therefore Application takes the place of ID in some contexts.
 	auto factorRef = make_shared<ParserReference>();  // factorRef->resolve(factor)
-	//typedef Skipwhite<ParserReference> WParserReference; WParserReference anArgumentW(factorRef);
 	auto anArgumentW = SkipWhite<ParserReference>(factorRef);
-	//typedef repeat0<WParserReference> Arguments0; Arguments0 arguments(anArgumentW);
 	auto arguments = Repeat0(anArgumentW);
-	//Application application(idparse, arguments);
-	auto application = WSequence("application",idparse, arguments);
-	//typedef choice3<Application,NUM,Parenthesized> Factor; Factor factor(application,numparse,parenthesized);
-	auto factor = Choice("factor",application,numparse,parenthesized);
-	auto multiplication = RLoop("multiplication",factor,times);// multiplication(factor, times);
-	auto addition = RLoop("addition",multiplication,plus);// addition(multiplication, plus);
-	//typedef Skipwhite<ID> WID; WID widparse(idparse);
-	//typedef repeat1<WID> Lhs; Lhs lhs(widparse);
+	auto application = (make_shared<WSequenceN>("application") && idparse && arguments);
+	auto factor = (make_shared<Choices>("factor") || application || numparse || parenthesized);
+	auto multiplication = RLoop("multiplication",factor,times);
+	auto addition = RLoop("addition",multiplication,plus);
 	auto lhs = Repeat1("lhs",SkipWhite(idparse));
-	//typedef wsequence3<Lhs,tch<'='>, RLoop> Equation; Equation equation(lhs,equals,addition);
-	auto equation = WSequence("equation",lhs,equals,addition);
+	auto equation = (make_shared<WSequenceN>("equation") && lhs && equals && addition);
 #endif
 
 	bool reservedid(const string& sym)
@@ -1615,87 +997,6 @@ template <typename Item, typename Join, bool endsWithJoin=false>
 			return 0;
 		}
 	}; 
-	template <typename P1>
-	shared_ptr<Choices>
-		operator /(const shared_ptr<Choices>& c, const shared_ptr<P1>& p1)
-	{
-		shared_ptr<Choices> r = c;
-		r->choices.push_back(p1);
-		return r;
-	}
-#if 0
-	template <typename P1, typename P2>
-	shared_ptr<choice2<P1,P2>>
-		operator /(const shared_ptr<P1>& p1, const shared_ptr<P2>& p2)
-	{
-		return make_shared<choice2<P1,P2>>("",p1,p2);
-	}
-#else
-	template <typename P1, typename P2>
-	shared_ptr<Choices>
-		operator /(const shared_ptr<P1>& p1, const shared_ptr<P2>& p2)
-	{
-		shared_ptr<Choices> r = make_shared<Choices>("");
-		r->choices.push_back(p1);
-		r->choices.push_back(p2);
-		return r;
-	}
-#endif
-#if 0
-	template <typename P1, typename P2,typename P3>
-	shared_ptr<choice3<P1,P2,P3>>
-		operator /(const shared_ptr<choice2<P1,P2>>& p12, const shared_ptr<P3>& p3)
-	{
-		return make_shared<choice3<P1,P2,P3>>("",p12->next1,p12->next2,p3);
-	}
-	template <typename P1, typename P2,typename P3,typename P4>
-	shared_ptr<choice4<P1,P2,P3,P4>>
-		operator /(const shared_ptr<choice3<P1,P2,P3>>& p123, const shared_ptr<P4>& p4)
-	{
-		return make_shared<choice4<P1,P2,P3,P4>>("",p123.next1,p123.next2,p123.next3,p4);
-	}
-	template <typename P1, typename P2,typename P3,typename P4,typename P5>
-	shared_ptr<choice5<P1,P2,P3,P4,P5>>
-		operator /(const shared_ptr<choice4<P1,P2,P3,P4>>& p1234, const shared_ptr<P5>& p5)
-	{
-		return make_shared<choice5<P1,P2,P3,P4,P5>>("",p1234.next1,p1234.next2,p1234.next3,p1234.next4,p5);
-	}
-#endif
-	shared_ptr<WSequenceN>
-		operator ,(const shared_ptr<ParserBase>& p1, const shared_ptr<ParserBase>& p2)
-	{
-		auto r = make_shared<WSequenceN>("");
-		r->elements.push_back(p1);
-		r->elements.push_back(p2);
-		return r;
-	}
-	shared_ptr<WSequenceN>
-		operator ,(const shared_ptr<WSequenceN>& p1, const shared_ptr<ParserBase>& p2)
-	{
-		auto r = p1;
-		p1->elements.push_back(p2);
-		return r;
-	}
-#if 0
-	template <typename P1, typename P2,typename P3>
-	shared_ptr<wsequence3<P1,P2,P3>>
-		operator ,(const shared_ptr<wsequence2<P1,P2>>& p12, const shared_ptr<P3>& p3)
-	{
-		return make_shared<wsequence3<P1,P2,P3>>("",p12->next1,p12->next2,p3);
-	}
-	template <typename P1, typename P2,typename P3,typename P4>
-	shared_ptr<wsequence4<P1,P2,P3,P4>>
-		operator ,(const shared_ptr<wsequence3<P1,P2,P3>>& p123, const shared_ptr<P4>& p4)
-	{
-		return make_shared<wsequence4<P1,P2,P3,P4>>("",p123.next1,p123.next2,p123.next3,p4);
-	}
-	template <typename P1, typename P2,typename P3,typename P4,typename P5>
-	shared_ptr<wsequence5<P1,P2,P3,P4,P5>>
-		operator ,(const shared_ptr<wsequence4<P1,P2,P3,P4>>& p1234, const shared_ptr<P5>& p5)
-	{
-		return make_shared<wsequence5<P1,P2,P3,P4,P5>>("",p1234.next1,p1234.next2,p1234.next3,p1234.next4,p5);
-	}
-#endif
 			
 	// module ::= 'module' name '(' exports ')' 'where' body
 	// body ::= '{' impdecls ';' topdecls '}'
@@ -1783,161 +1084,193 @@ void hs()
 	auto patFrom = make_shared<PatFrom>();
 	auto contextTo = make_shared<ContextTo>();
 	auto dotdot = make_shared<DotDot>();
-	auto exportItem = Choice("exportItem",varID,conID);
+	auto exportItem = make_shared<Choices>("exportItem") || varID || conID;
 	auto exportComma = RLoop("exportComma",exportItem,comma);
-	auto exports = WSequence("exports",lparen, exportComma, rparen);
+	auto exports = (make_shared<WSequenceN>("exports") && lparen && exportComma && rparen);
 	auto varsym = make_shared<VarSym>();// varsym;
 	auto consym = make_shared<ConSym>();// consym;
-	//auto hliteral = Choice("literal",make_shared<NUM>(),make_shared<Quoted<'\''>>(),make_shared<Quoted<'"'>>());
-	auto hliteral = make_shared<NUM>() / make_shared<Quoted<'\''>>() / make_shared<Quoted<'"'>>();
+	auto hliteral = make_shared<NUM>() || make_shared<Quoted<'\''>>() || make_shared<Quoted<'"'>>();
 	hliteral->name = "hliteral";
 	//auto varop = Choice("varop",varsym,WSequence("varIDop",backTick,varID,backTick));
-	auto varop = varsym / (backTick,varID,backTick);
+	auto varop = varsym || (backTick && varID && backTick);
 	varop->name = "varop";
 	//auto conop = Choice("conop",consym,WSequence("conIDop",backTick,conID,backTick));
-	auto conop = consym / (backTick,conID,backTick);
-	conop->name = "conop";
-	auto qop = Choice("qop",varop,conop);
-	auto unit = WSequence("unit",lparen,rparen);
-	auto elist = WSequence("[]",lbracket,rbracket);
-	auto etuple = WSequence("etuple",lparen,Repeat1(",",comma),rparen);
-	auto efn = WSequence("efn",lparen,fnTo,rparen);
+	auto conop = make_shared<Choices>("conop") || consym || (make_shared<WSequenceN>("conIDop") && backTick && conID && backTick);
+	auto qop = make_shared<Choices>("qop")|| varop || conop;
+	auto unit = (make_shared<WSequenceN>("unit") && lparen && rparen);
+	auto elist = (make_shared<WSequenceN>("[]") && lbracket && rbracket);
+	auto etuple = (make_shared<WSequenceN>("etuple") && lparen && Repeat1(",",comma) && rparen);
+	auto efn = (make_shared<WSequenceN>("efn") && lparen && fnTo && rparen);
 	auto qconsym = consym;
-	auto gconsym = Choice("gconsym",colon,qconsym);
-	auto qcon = Choice("qcon",conID,WSequence("(gconsym)",lparen,gconsym,rparen));
-	auto gcon = Choice("gcon",unit,elist,etuple,qcon);
+	auto gconsym = make_shared<Choices>("gconsym") || colon || qconsym;
+	auto qcon = make_shared<Choices>("qcon") || conID || (make_shared<WSequenceN>("(gconsym)") && lparen && gconsym &&rparen);
+	auto gcon = make_shared<Choices>("gcon") || unit || elist || etuple || qcon;
 	auto qvarid = varID;
 	auto qvarsym = varsym;
-	auto qvar = Choice("qvar",qvarid,WSequence("(qvarsym)",lparen,qvarsym,rparen));
+	auto qvar = make_shared<Choices>("qvar") || qvarid || (make_shared<WSequenceN>("(qvarsym)") && lparen && qvarsym && rparen);
 	auto expRef = make_shared<ParserReference>();
 	auto infixexpRef = make_shared<ParserReference>();
 	auto expRefComma = RLoop("expRefComma",expRef,comma);
-	auto fbind = WSequence("fbind",qvar,equals,expRef);
-#if 0
-	auto aexp = Choice("aexp",varID,
-					gcon,
-					hliteral,
-					WSequence("(exp)",lparen,expRef,rparen),
-					Choice("aexp2",WSequence("(exp,exp)",lparen,expRefComma,rparen),
-						WSequence("[exp,exp]",lbracket,expRefComma,rbracket),
-						WSequence("[exp,exp..exp]",lbracket,expRef,Optional(WSequence(",exp",comma,expRef)),dotdot,expRef,rbracket),
-						//WSequence("[exp|qual,..]",lbracket,expRef,vertbar,RLoop(qual,comma),rbracket),
-						WSequence("(infixexp qop)",lparen,infixexpRef,qop,rparen),
-						Choice("aexp3",WSequence("(qop<-> infixexp)",lparen,qop,infixexpRef,rparen),
-									WSequence("qcon { fbind+ }",qcon,lbrace,Repeat1("fbind+",fbind),rbrace)
-						/*more*/)));
-#else
-	auto aexp = varID / 
-					gcon/
-					hliteral/
-					(make_shared<WSequenceN>("(exp)"),lparen,expRef,rparen)/
-					(make_shared<WSequenceN>("(exp,exp)"),lparen,expRefComma,rparen)/
-					(make_shared<WSequenceN>("[exp,exp]"),lbracket,expRefComma,rbracket)/
-					(make_shared<WSequenceN>("[exp,exp..exp]"),lbracket,expRef,Optional(WSequence(",exp",comma,expRef)),dotdot,expRef,rbracket)/
-					//WSequence("[exp|qual,..]",lbracket,expRef,vertbar,RLoop(qual,comma),rbracket)/
-					(make_shared<WSequenceN>("(infixexp qop)"),lparen,infixexpRef,qop,rparen)/
-					(make_shared<WSequenceN>("(qop<-> infixexp)"),lparen,qop,infixexpRef,rparen)/
-					(make_shared<WSequenceN>("qcon{fbind+}"),qcon,lbrace,Repeat1("fbind+",fbind),rbrace);
+	auto fbind = (make_shared<WSequenceN>("fbind") && qvar && equals && expRef);
+	auto aexp = varID  
+				|| gcon
+				|| hliteral
+				|| (make_shared<WSequenceN>("(exp)") && lparen && expRef && rparen)
+				|| (make_shared<WSequenceN>("(exp,exp)") && lparen && expRefComma && rparen)
+				|| (make_shared<WSequenceN>("[exp,exp]") && lbracket && expRefComma && rbracket)
+				||(make_shared<WSequenceN>("[exp,exp..exp]") && lbracket && expRef && Optional((make_shared<WSequenceN>(",exp") && comma,expRef)) && dotdot && expRef && rbracket)
+				//||(make_shared<WSequenceN>("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop(qual,comma) && rbracket)
+				||(make_shared<WSequenceN>("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
+				||(make_shared<WSequenceN>("(qop<-> infixexp)") && lparen && qop && infixexpRef && rparen)
+				||(make_shared<WSequenceN>("qcon{fbind+}") && qcon && lbrace && Repeat1("fbind+",fbind) && rbrace)
+				;
 	aexp->name = "aexp";
-#endif
 	auto fexpRef = make_shared<ParserReference>();
 	//auto fexp = WSequence(Optional(fexpRef),aexp);
 	auto fexp = Repeat1("fexp",SkipWhite(aexp));
 	fexpRef->resolve(fexp);
 	auto declsRef = make_shared<ParserReference>();
 	auto patRef = make_shared<ParserReference>();// patRef;
-	auto wheres = WSequence("where decls",whereKw,declsRef);
-	auto guard = Choice("guard", WSequence("pat->infixexp",patRef,patFrom,infixexpRef)
-								, WSequence("let decls",letKw,declsRef)
-								, infixexpRef
-						);
-	auto guards = WSequence("guards",make_shared<tch<'|'>>(),Repeat1("guard+",guard));
-	auto gdpat = Repeat1("gdpatr",WSequence("gdpat",guards,fnTo,expRef));
-	auto alt = Choice("alt", WSequence("pat<-exp",patRef,patFrom,expRef,Optional(wheres)),
-							WSequence("pat gdpat",patRef,gdpat,Optional(wheres))
-							);
+	auto wheres = (make_shared<WSequenceN>("where decls") && whereKw && declsRef);
+	auto guard = make_shared<Choices>("guard") 
+								|| (make_shared<WSequenceN>("pat->infixexp") && patRef && patFrom && infixexpRef)
+								|| (make_shared<WSequenceN>("let decls") && letKw && declsRef)
+								|| infixexpRef
+						        ;
+	auto guards = (make_shared<WSequenceN>("guards") && make_shared<tch<'|'>>() && Repeat1("guard+",guard));
+	auto gdpat = Repeat1("gdpatr",(make_shared<WSequenceN>("gdpat") && guards && fnTo && expRef));
+	auto alt = make_shared<Choices>("alt") || (make_shared<WSequenceN>("pat<-exp") && patRef && patFrom && expRef && Optional(wheres))
+										   || (make_shared<WSequenceN>("pat gdpat") && patRef && gdpat && Optional(wheres))
+											;
 	auto alts = RLoop2("altSemiAlt",alt,semicolon);
-	auto stmt = Choice("stmt",
-						WSequence("stmt:exp",expRef,semicolon),
-						WSequence("stmt:pat->exp",patRef,fnTo,expRef,semicolon),
-						WSequence("stmt:let decls",letKw,declsRef,semicolon),
-						semicolon);
-	auto stmts = WSequence("stmts",Repeat1("stmt+",SkipWhite(stmt)),expRef,Optional(semicolon));
-	auto lexp = Choice("lexp",
-						WSequence("lambdaabs",make_shared<tch<'\\'>>(),Repeat1("\\aexp+",SkipWhite(aexp)),fnTo,expRef), 
-						Choice("lexp-kw",
-							WSequence("let",letKw,declsRef,inKw,expRef),
-							WSequence("if",ifKw,expRef,Optional(semicolon),WSequence("ifthen",thenKw,expRef,Optional(semicolon)),WSequence("ifelse",elseKw,expRef)),
-							WSequence("case",caseKw,expRef,ofKw,alts),
-							WSequence("do",doKw,lbrace,stmts,rbrace)),
-						fexp);
-	auto infixexp = Choice("infixexp", WSequence("lexp,qop,infixexp",lexp,qop,infixexpRef),WSequence("-infixexp",minus,infixexpRef),lexp);
+	auto stmt = make_shared<Choices>("stmt") 
+							||(make_shared<WSequenceN>("stmt:exp") && expRef && semicolon)
+							||(make_shared<WSequenceN>("stmt:pat->exp") && patRef && fnTo && expRef && semicolon)
+							||(make_shared<WSequenceN>("stmt:let decls") && letKw && declsRef && semicolon)
+							||semicolon
+							;
+	auto stmts = (make_shared<WSequenceN>("stmts") && Repeat1("stmt+",SkipWhite(stmt)) && expRef && Optional(semicolon));
+	auto lexp = make_shared<Choices>("lexp")
+						||(make_shared<WSequenceN>("lambdaabs") && make_shared<tch<'\\'>>() && Repeat1("\\aexp+",SkipWhite(aexp)) && fnTo && expRef)
+						||(make_shared<Choices>("lexp-kw")
+							|| (make_shared<WSequenceN>("let") && letKw && declsRef && inKw && expRef)
+							||(make_shared<WSequenceN>("if") && ifKw && expRef && Optional(semicolon) && (make_shared<WSequenceN>("ifthen") && thenKw && expRef && Optional(semicolon)) && (make_shared<WSequenceN>("ifelse") && elseKw && expRef))
+							||(make_shared<WSequenceN>("case") && caseKw && expRef && ofKw && alts)
+							||(make_shared<WSequenceN>("do") && doKw && lbrace && stmts && rbrace))
+						||fexp
+						;
+	auto infixexp = make_shared<Choices>("infixexp")
+						|| (make_shared<WSequenceN>("lexp,qop,infixexp") && lexp && qop && infixexpRef)
+						|| (make_shared<WSequenceN>("-infixexp") && minus && infixexpRef) 
+						|| lexp
+						;
 	auto typeRef = make_shared<ParserReference>();
 	auto atypeRef = make_shared<ParserReference>();
 	auto tycls = conID;
 	auto qtycls = tycls;
 	auto tyvar = varID;
-	auto klass = Choice("klass",WSequence("klassNulTyVar",qtycls,tyvar),WSequence("klassMultiTyVar",qtycls,lparen,tyvar,Repeat1("",atypeRef)));
-	auto context = Choice("context", klass, WSequence("(klass ,klass*)",lparen,RLoop("klassComma",klass,comma),rparen));
-	auto exp = WSequence("exp",infixexpRef,Optional(WSequence("typesig",colonColon,Optional(WSequence("context",context,contextTo)),typeRef))) ;
+	auto klass = make_shared<Choices>("klass")
+						||(make_shared<WSequenceN>("klassNulTyVar") && qtycls && tyvar)
+						||(make_shared<WSequenceN>("klassMultiTyVar") && qtycls && lparen && tyvar && Repeat1("",atypeRef) && rparen)
+						;
+	auto context = make_shared<Choices>("context")
+						|| klass
+						|| (make_shared<WSequenceN>("(klass ,klass*)") && lparen && RLoop("klassComma",klass,comma) && rparen)
+						;
+	auto exp = (make_shared<WSequenceN>("exp") && infixexpRef && Optional((make_shared<WSequenceN>("typesig") && colonColon && Optional((make_shared<WSequenceN>("context") && context && contextTo)) && typeRef))) ;
 	infixexpRef->resolve(infixexp);
 	expRef->resolve(exp);
-	auto rhs = WSequence("rhs",equals, exp);
+	auto rhs = (make_shared<WSequenceN>("rhs") && equals && exp);
 	auto tycon = conID;
 	auto qtycon = tycon;
-	auto gtycon = Choice("gtycon",qtycon,unit,elist,efn,etuple);
-	auto var = Choice("var",varID,WSequence("(varsym)",lparen,varsym,rparen));
-	auto con = Choice("con",conID,WSequence("(consym)",lparen,consym,rparen));
-	auto tupleCon = WSequence("tupleCon",lparen,RLoop("type,",typeRef,comma),rparen);
-	auto listCon = WSequence("listCon",lbracket, typeRef, rbracket);
-	auto parType = WSequence("parType",lparen,typeRef,rparen);
-	auto atype = Choice("atype",gtycon,tyvar,tupleCon,listCon,parType);
+	auto gtycon = make_shared<Choices>("gtycon") || qtycon || unit || elist || efn || etuple;
+	auto var = make_shared<Choices>("var") 
+						|| varID 
+						|| (make_shared<WSequenceN>("(varsym)") && lparen && varsym && rparen)
+						;
+	auto con = make_shared<Choices>("con")
+						||conID
+						||(make_shared<WSequenceN>("(consym)") && lparen && consym && rparen)
+						;
+	auto tupleCon = (make_shared<WSequenceN>("tupleCon") && lparen && RLoop("type,",typeRef,comma) && rparen);
+	auto listCon = (make_shared<WSequenceN>("listCon") && lbracket && typeRef && rbracket);
+	auto parType = (make_shared<WSequenceN>("parType") && lparen && typeRef && rparen);
+	auto atype = make_shared<Choices>("atype")
+						|| gtycon
+						|| tyvar
+						|| tupleCon
+						|| listCon
+						|| parType
+						;
 	atypeRef->resolve(atype);
 	auto btypeRef = make_shared<ParserReference>();
-	//auto btype = WSequence(Optional(btypeRef),atype); // need to reformulate
+	//auto btype = Optional(btypeRef) && atype; // need to reformulate
 	auto btype = Repeat1("btype",SkipWhite(atype)); // maybe?
 	//auto btype = atype;
 	btypeRef->resolve(btype);
 	auto type = btype; 
 	typeRef->resolve(type);
-	auto gendecl = WSequence("gendecl",Repeat1("varID",SkipWhite(varID)),colonColon,type);
-	auto apatRef = make_shared<ParserReference>();// apatRef;
-	auto fpat = WSequence("fpat",varID,equals,patRef);
+	auto gendecl = (make_shared<WSequenceN>("gendecl") && Repeat1("varID",SkipWhite(varID)) && colonColon && type);
+	auto apatRef = make_shared<ParserReference>();
+	auto fpat = (make_shared<WSequenceN>("fpat") && varID && equals && patRef);
 	auto patternComma = RLoop("patternComma",patRef,comma);
-	auto patterns = Choice("patterns",WSequence("(pat)",lparen,patRef,rparen)
-					, WSequence("(pat,pat)",lparen,patternComma,rparen)
-					, WSequence("[pat,pat]",lbracket,patternComma,lbracket)
-					, WSequence("~apat",tilde,apatRef)
-					);
-	auto apat = Choice("apat",WSequence("var@apat",var,Optional(WSequence("@apat",atSign,apatRef)))
-				, gcon
-				, WSequence("qcon{fpat,fpat}",qcon, lbrace, Optional(RLoop("fpat,",fpat,comma)), rbrace)
-				, wildcard
-				, patterns);
+	auto patterns = make_shared<Choices>("patterns")
+						|| (make_shared<WSequenceN>("(pat)") && lparen && patRef && rparen)
+						|| (make_shared<WSequenceN>("(pat,pat)") && lparen && patternComma && rparen)
+						|| (make_shared<WSequenceN>("[pat,pat]") && lbracket && patternComma && lbracket)
+						|| (make_shared<WSequenceN>("~apat") && tilde && apatRef)
+						;
+	auto apat = make_shared<Choices>("apat") 
+						|| (make_shared<WSequenceN>("var@apat") && var && Optional((make_shared<WSequenceN>("@apat") && atSign && apatRef)))
+						|| gcon
+						|| (make_shared<WSequenceN>("qcon{fpat,fpat}") && qcon && lbrace && Optional(RLoop("fpat,",fpat,comma)) && rbrace)
+						|| wildcard
+						|| patterns
+						;
 	apatRef->resolve(apat);
 	auto funlhsRef = make_shared<ParserReference>();// funlhsRef;
-	auto funlhs = Choice("funlhs",WSequence("var apat+",varID,Repeat1("apat+",apat)),WSequence("pat,varop,pat",patRef,varop,patRef),WSequence("(funlhs)apat",lparen,funlhsRef,rparen,Repeat1("apat+",apat)));
+	auto funlhs = make_shared<Choices>("funlhs") 
+						|| (make_shared<WSequenceN>("var apat+") && varID && Repeat1("apat+",apat))
+						|| (make_shared<WSequenceN>("pat,varop,pat") && patRef && varop && patRef)
+						|| (make_shared<WSequenceN>("(funlhs)apat") && lparen && funlhsRef && rparen && Repeat1("apat+",apat))
+						;
 	funlhsRef->resolve(funlhs);
-	auto qconop = Choice("qconop",gconsym,WSequence("`conID`",backTick,conID,backTick));
-	auto lpat = Choice("lpat",apat,WSequence("gcon apat+",gcon,Repeat1("apat+",apat)));
-	auto pat = Choice("pat",WSequence("lpat,qconop,pat",lpat,qconop,patRef),lpat);
+	auto qconop = make_shared<Choices>("qconop") 
+						|| gconsym 
+						|| (make_shared<WSequenceN>("`conID`") && backTick && conID && backTick)
+						;
+	auto lpat = make_shared<Choices>("lpat") 
+						||apat
+						||(make_shared<WSequenceN>("gcon apat+") && gcon && Repeat1("apat+",apat))
+						;
+	auto pat = make_shared<Choices>("pat") 
+						||(make_shared<WSequenceN>("lpat,qconop,pat") && lpat && qconop && patRef)
+						||lpat
+						;
 	patRef->resolve(pat);
-	auto decl = Choice("decl",gendecl,WSequence("funlhs|pat rhs",Choice("funlhs|pat",funlhs,pat),rhs));
+	auto decl = make_shared<Choices>("decl") 
+						||gendecl
+						||(make_shared<WSequenceN>("funlhs|pat rhs") && (make_shared<Choices>("funlhs|pat") ||funlhs ||pat) && rhs)
+						;
 	auto decls = RLoop("decls",decl,semicolon);
 	declsRef->resolve(decls);
-	auto cname = Choice("cname",var,con);
-	auto import = Choice("import", var, 
-							WSequence("tyconwcnames",tycon,Optional(Choice("dotsorcnames",WSequence("(..)",lparen,dotdot,rparen),
-															   WSequence("(cnames)",lparen,RLoop("cnames",cname,comma),rparen)))),
-							WSequence("tyclswvars",tycls,Optional(Choice("dotsorvars",WSequence("(..)",lparen,dotdot,rparen),
-															   WSequence("(vars)",lparen,RLoop("vars",var,comma),rparen)))));
-	auto impspec = WSequence("impspec",Optional(hidingKw),lparen,RLoop("importComma",import,comma),rparen);
-	auto impdecl = WSequence("impdecl",importKw,Optional(qualifiedKw),moduleID,Optional(WSequence("as modopt",asKw,moduleID)),Optional(impspec));
+	auto cname = make_shared<Choices>("cname") ||var ||con;
+	auto import = make_shared<Choices>("import") 
+						|| var
+						|| (make_shared<WSequenceN>("tyconwcnames") && tycon && Optional(make_shared<Choices>("dotsorcnames") || (make_shared<WSequenceN>("(..)") && lparen && dotdot && rparen)
+								|| (make_shared<WSequenceN>("(cnames)") && lparen && RLoop("cnames",cname,comma) && rparen)))
+						|| (make_shared<WSequenceN>("tyclswvars") && tycls && Optional(make_shared<Choices>("dotsorvars") || (make_shared<WSequenceN>("(..)") && lparen && dotdot && rparen)
+								|| (make_shared<WSequenceN>("(vars)") && lparen && RLoop("vars",var,comma) && rparen)))
+						;
+	auto impspec = (make_shared<WSequenceN>("impspec") && Optional(hidingKw) && lparen && RLoop("importComma",import,comma) && rparen);
+	auto impdecl = (make_shared<WSequenceN>("impdecl") && importKw && Optional(qualifiedKw)&& moduleID && Optional((make_shared<WSequenceN>("as modopt") && asKw && moduleID)) && Optional(impspec));
 	auto imports = RLoop2("imports", impdecl, semicolon);
-	auto body = Choice("body", WSequence("bodyOfDeclsWithImports", lbrace, imports, /*semicolon,*/ decls, rbrace), 
-								WSequence("bodyOfImports",lbrace, imports, rbrace), 
-								WSequence("bodyOfDecls",lbrace, decls, rbrace));
-	auto module = WSequence("module",moduleKw, moduleID, exports, whereKw, body);
+	auto body = make_shared<Choices>("body") 
+						|| (make_shared<WSequenceN>("bodyOfDeclsWithImports") && lbrace && imports && /*semicolon && */ decls && rbrace)
+		                || (make_shared<WSequenceN>("bodyOfImports") && lbrace && imports && rbrace)
+						|| (make_shared<WSequenceN>("bodyOfDecls") && lbrace && decls && rbrace)
+						;
+	auto module = (make_shared<WSequenceN>("module") && moduleKw && moduleID && exports && whereKw && body);
 	string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r }");
 	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4= \\a->a+1; circumference r=2*pi*r }");
 	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; circumference r=2*pi*r }");
@@ -1956,10 +1289,11 @@ void hs()
 }
 int main(int argc, const char* argv[]) {
 	cout << "PEGHS starts" << endl;
-	//hs();
+	hs();
 #if 1
 	shared_ptr<ParserBase> p = x();
 	string input1("12345ABCDabcd");
+	ParseState::reset();
 	ParseStatePtr st = make_shared<ParseState>(input1);
 	ParseResultPtr r = (*p)(st);
 	if (r)
@@ -1973,6 +1307,7 @@ int main(int argc, const char* argv[]) {
 		cout << "r==null" << endl;
 	}
 	string input1b("x = a + b + c * 9 + 10 * d");
+	ParseState::reset();
 	ParseStatePtr st1b = make_shared<ParseState>(input1b);
 	r = (*y())(st1b);
 	if (r)
@@ -1986,6 +1321,7 @@ int main(int argc, const char* argv[]) {
 		cout << "r==null" << endl;
 	}
 	string input1c("hypot o a = o * o + a * a");
+	ParseState::reset();
 	ParseStatePtr st1c = make_shared<ParseState>(input1c);
 	r = (*y())(st1c);
 
@@ -1999,14 +1335,14 @@ int main(int argc, const char* argv[]) {
 	{
 		cout << "r==null" << endl;
 	}
-	string input2("circumference r = 2 * pi * r");
-
 	//typedef trange<32, 0x1FFFF> AnyChar;
 	//AnyChar anyChar;
 	//typedef repeat0<AnyChar> Anything;
 	//Anything anything(anyChar);
 	auto anything = Repeat0(make_shared<trange<32,0x1FFFF>>());
 
+
+	string input2("circumference r = 2 * pi * r");
 
 	/*
 equation : lhs '=' rhs
@@ -2022,6 +1358,8 @@ factor : '(' rhs ')'
 application : id factor*
 lhs : id*
 */
+	//return 0;
+	ParseState::reset();
 
 	ParseStatePtr doc1=make_shared<ParseState>(input2);
 
