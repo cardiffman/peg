@@ -89,6 +89,22 @@ result of that expression. For example:
     auto exprDef = Choice(WSequence(lparen,expr,rparen), RLoop(literal,op));
     expr->resolve(exprDef);
     
+This framework readily allows a grammar that says
+    Choice(WSequence(nonterm1,nonterm2,nonterm3,nonterm4,nonterm5)
+         , WSequence(nonterm1,nonterm2,nonterm4,nonterm6,nonterm7)
+         )
+The Choice operator is supposed to try parsing the second choice if the first
+choice fails, backing up to its original starting point. The performance could
+easily be poor. This implementation, like most PEG implementations, assumes that
+parsers always return the same results when called from the same position in the
+input. Therefore a cache of previously achieved parse results is maintained. In
+lazy functional languages the built-in memoization gives this same optimization.
+In this implementation there is a map keyed by the parser ID and text position
+that gives the ParseResultPtr that was returned, if in fact there has been an 
+attempt to use the same parser at the same spot. This would not prevent left-
+recursion problems because if a nonterminal parser is left-recursing into itself
+it will not have returned its result yet. 
+
 The original committed state of peg.cpp represents a mixture of stages of 
 evolution in the implementation of PEG and parser combinators in C++. The 
 templates sequence2, wsequence2, and choice2 and their bretheren were my initial 

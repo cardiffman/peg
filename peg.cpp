@@ -154,17 +154,6 @@ ostream& operator<<(ostream& os, const AST& ast)
 {
 	os << ast.to_string();
 	return os;
-#if 0
-  if (ast.s.size())
-	return os << ast.s;
-  if (ast.ast.size())
-  {
-	os << *(ast.ast[0]);
-	for (size_t i=1; i<ast.ast.size(); ++i)
-	  os << ' ' << *(ast.ast[i]);
-  }
-  return os;
-#endif
 }
 
 class ParseResult
@@ -187,12 +176,6 @@ struct ParserBase
   ParserBase() : parser_id(parser_id_gen++) {}
   virtual ~ParserBase() {}
   ParseResultPtr operator()(const ParseStatePtr& start)
-#if 0
-  {
-	  return parseOp(start);
-  }
-  ParseResultPtr parseOp(const ParseStatePtr& start)
-#endif
   {
 	pair<bool,ParseResultPtr> cached = start->GetCached(parser_id);
 	if (cached.first)
@@ -479,7 +462,7 @@ template <typename Parser> struct repeat0 : public ParserBase
 	return make_shared<ParseResult>(rep->remaining, ast);
   }
 };
-shared_ptr<ParserBase> Repeat0(const shared_ptr<ParserBase>& parser)
+ParserPtr Repeat0(const ParserPtr& parser)
 {
 	return shared_ptr<ParserBase>(new repeat0<ParserBase>(parser));
 }
@@ -550,7 +533,6 @@ template <typename Parser> ParseResultPtr skipwhite(const ParseStatePtr& start, 
 
 struct WSequenceN : public ParserBase
 {
-	typedef shared_ptr<ParserBase> ParserPtr;
 	WSequenceN(const string& name): name(name) {}
 	string name;
 	typedef vector<ParserPtr> Parsers;
@@ -585,7 +567,7 @@ struct WSequenceN : public ParserBase
 
 struct Choices : public ParserBase
 {
-	typedef shared_ptr<ParserBase> ParserPtr;
+	//typedef shared_ptr<ParserBase> ParserPtr;
 	Choices(const string& name): name(name) {}
 	string name;
 	typedef vector<ParserPtr> Parsers;
@@ -611,7 +593,6 @@ struct Choices : public ParserBase
 	}
 };
 
-
 template <typename Parser1, typename Parser2> shared_ptr<Choices> operator||(const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2) {
 	auto r = make_shared<Choices>("||");
 	r->choices.push_back(parser1);
@@ -623,6 +604,7 @@ template <typename Parser1> shared_ptr<Choices> operator||(const shared_ptr<Choi
 	r->choices.push_back(parser1);
 	return r;
 }
+
 shared_ptr<Choices> operator||(const shared_ptr<Choices>& c, const string& name) {
 	auto r = c;
 	r->name = name;
@@ -672,7 +654,8 @@ shared_ptr<ParserBase> x()
 	auto digits = make_shared<trange<'0','9'>>();// digits;
 	auto lc = make_shared<trange<'a','z'>>();// lc;
 	auto uc = make_shared<trange<'A','Z'>>();// uc;
-	auto p = Repeat0(digits || lc || uc);
+	auto letters = lc || uc;
+	auto p = Repeat0(digits || letters);
 	return p;
 }
 
@@ -769,64 +752,19 @@ template <typename Item, typename Join, bool endsWithJoin=false>
 	return r;
   }
 };
-#if 0
-	template <typename Parser1, typename Parser2> 
-		shared_ptr<Choices> 
-			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2)
+template <typename P1, typename P2>
+	shared_ptr<rLoop<P1,P2,false>>
+		RLoop(const string& name, const shared_ptr<P1>& p1, const shared_ptr<P2>& p2)
 	{
-		auto r = make_shared<Choices>(name);
-		r->choices.push_back(parser1);
-		r->choices.push_back(parser2);
-		return r;
+		return make_shared<rLoop<P1,P2,false>>(name, p1, p2);
 	}
-	template <typename Parser1, typename Parser2, typename Parser3> 
-		shared_ptr<Choices> 
-			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3)
+template <typename P1, typename P2>
+	shared_ptr<rLoop<P1,P2,true>>
+		RLoop2(const string& name, const shared_ptr<P1>& p1, const shared_ptr<P2>& p2)
 	{
-		auto r = make_shared<Choices>(name);
-		r->choices.push_back(parser1);
-		r->choices.push_back(parser2);
-		r->choices.push_back(parser3);
-		return r;
+		return make_shared<rLoop<P1,P2,true>>(name, p1, p2);
 	}
-	template <typename Parser1, typename Parser2, typename Parser3, typename Parser4> 
-		shared_ptr<Choices> 
-			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3, const shared_ptr<Parser4>& parser4)
-	{
-		auto r = make_shared<Choices>(name);
-		r->choices.push_back(parser1);
-		r->choices.push_back(parser2);
-		r->choices.push_back(parser3);
-		r->choices.push_back(parser4);
-		return r;
-	}
-	template <typename Parser1, typename Parser2, typename Parser3, typename Parser4, typename Parser5> 
-		shared_ptr<Choices> 
-			Choice(const string& name, const shared_ptr<Parser1>& parser1, const shared_ptr<Parser2>& parser2, const shared_ptr<Parser3>& parser3, const shared_ptr<Parser4>& parser4, const shared_ptr<Parser5>& parser5)
-	{
-		auto r = make_shared<Choices>(name);
-		r->choices.push_back(parser1);
-		r->choices.push_back(parser2);
-		r->choices.push_back(parser3);
-		r->choices.push_back(parser4);
-		r->choices.push_back(parser5);
-		return r;
-	}
-#endif
-	template <typename P1, typename P2>
-		shared_ptr<rLoop<P1,P2,false>>
-			RLoop(const string& name, const shared_ptr<P1>& p1, const shared_ptr<P2>& p2)
-		{
-			return make_shared<rLoop<P1,P2,false>>(name, p1, p2);
-		}
-	template <typename P1, typename P2>
-		shared_ptr<rLoop<P1,P2,true>>
-			RLoop2(const string& name, const shared_ptr<P1>& p1, const shared_ptr<P2>& p2)
-		{
-			return make_shared<rLoop<P1,P2,true>>(name, p1, p2);
-		}
 
-#if 1
 	auto idparse = make_shared<ID>();
 	auto numparse = make_shared<NUM>();
 	auto equals = make_shared<tch<'='>>();
@@ -853,7 +791,6 @@ template <typename Item, typename Join, bool endsWithJoin=false>
 	auto addition = RLoop("addition",multiplication,plus);
 	auto lhs = Repeat1("lhs",SkipWhite(idparse));
 	auto equation = (make_shared<WSequenceN>("equation") && lhs && equals && addition);
-#endif
 
 	bool reservedid(const string& sym)
 	{
@@ -1290,7 +1227,7 @@ void hs()
 int main(int argc, const char* argv[]) {
 	cout << "PEGHS starts" << endl;
 	hs();
-#if 1
+
 	shared_ptr<ParserBase> p = x();
 	string input1("12345ABCDabcd");
 	ParseState::reset();
@@ -1379,6 +1316,6 @@ lhs : id*
 	{
 		cout << "e0==null" << endl;
 	}
-#endif
+
 	return 0;
 }
