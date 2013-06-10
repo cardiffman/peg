@@ -1,3 +1,10 @@
+20130609:
+Reorg the test code into separate programs for each test grammar. The interesting
+equations grammar remains in peg.cpp for now.
+
+The aexp = [exp|qual+] production has been added to aexp. This seemed nicer after
+moving aexp. No testing beyond the fact that the existing peghs test still works.
+
 20130608: 
 Mostly non-semantic change moving the main classes to their own headers.
 
