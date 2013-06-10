@@ -15,34 +15,34 @@
 // a compile-time string constant.
 template <const char match[]> struct ttoken : public ParserBase
 {
-  ttoken() {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	size_t ml = strlen(match);
-	if (start->length() >= ml)
+	ttoken() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-	  if (start->substr(0, ml) == match)
-	  {
-	      std::cout << "ttoken "<< match << " matched " << start->substr(0) << std::endl;
-	      return std::make_shared<ParseResult>(start->from(ml), new StringAST(match));
-	  }
+		size_t ml = strlen(match);
+		if (start->length() >= ml)
+		{
+			if (start->substr(0, ml) == match)
+			{
+				std::cout << "ttoken "<< match << " matched " << start->substr(0) << std::endl;
+				return std::make_shared<ParseResult>(start->from(ml), new StringAST(match));
+			}
+		}
+		return ParseResultPtr();
 	}
-	return ParseResultPtr();
-  }
 };
 
 // When a character has to be a given character, this object represents
 // testing for a character code established at compile time.
 template <int c> struct tch : public ParserBase
 {
-  tch() {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	int ch = start->at(0);
-	if (ch == c)
-	    return std::make_shared<ParseResult>(start->from(1), new StringAST(std::string(1, ch)));
-	return ParseResultPtr();
-  }
+	tch() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		int ch = start->at(0);
+		if (ch == c)
+			return std::make_shared<ParseResult>(start->from(1), new StringAST(std::string(1, ch)));
+		return ParseResultPtr();
+	}
 };
 
 // When a character can be from a large set such as a-z this object
@@ -51,14 +51,14 @@ template <int c> struct tch : public ParserBase
 // with this template.
 template<int rangeBegin, int rangeEnd> struct trange : public ParserBase
 {
-  trange() {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	int ch = start->at(0);
-	if (ch >= rangeBegin && ch <= rangeEnd)
-	    return std::make_shared<ParseResult>(start->from(1), new StringAST(std::string(1, ch)));
-	return ParseResultPtr();
-  }
+	trange() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		int ch = start->at(0);
+		if (ch >= rangeBegin && ch <= rangeEnd)
+			return std::make_shared<ParseResult>(start->from(1), new StringAST(std::string(1, ch)));
+		return ParseResultPtr();
+	}
 };
 
 template <typename Parser> ParseResultPtr skipwhite(const ParseStatePtr& start, const std::shared_ptr<Parser>& next)
@@ -242,7 +242,7 @@ struct Choices : public ParserBase
 };
 
 template <typename Parser1, typename Parser2> std::shared_ptr<Choices> operator||(const std::shared_ptr<Parser1>& parser1, const std::shared_ptr<Parser2>& parser2) {
-    auto r = std::make_shared<Choices>("||");
+	auto r = std::make_shared<Choices>("||");
 	r->choices.push_back(parser1);
 	r->choices.push_back(parser2);
 	return r;
@@ -324,7 +324,7 @@ template <typename Parser1> std::shared_ptr<WSequenceN> operator&&(const std::sh
 template <typename Item, typename Join, bool endsWithJoin>
 struct rLoop : public ParserBase 
 {
-rLoop(const std::string& name, const std::shared_ptr<Item>& item, const std::shared_ptr<Join>& join) : name(name), item(item), join(join) {}
+	rLoop(const std::string& name, const std::shared_ptr<Item>& item, const std::shared_ptr<Join>& join) : name(name), item(item), join(join) {}
 	std::string name;
 	std::shared_ptr<Item> item;
 	std::shared_ptr<Join> join;

@@ -42,18 +42,18 @@ ostream& operator<<(ostream& os, const AST& ast)
  */
 struct token : public ParserBase
 {
-  token(const string& match) : match(match) {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	if (start->length() >= match.length())
+	token(const string& match) : match(match) {}
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-	  if (start->substr(0, match.length()) == match)
+		if (start->length() >= match.length())
+		{
+			if (start->substr(0, match.length()) == match)
 
-		  return make_shared<ParseResult>(start->from(match.length()), new IdentifierAST(match));
+				return make_shared<ParseResult>(start->from(match.length()), new IdentifierAST(match));
+		}
+		return ParseResultPtr();
 	}
-	return ParseResultPtr();
-  }
-  string match;
+	string match;
 };
 
 // When a character can be from a large set such as a-z this object
@@ -89,32 +89,32 @@ struct ch : public ParserBase
 // testing for a character code established at runtime.
 struct notch : public ParserBase
 {
-  notch(int c) : c(c) {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	int ch = start->at(0);
-	if (ch == 0)
+	notch(int c) : c(c) {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		int ch = start->at(0);
+		if (ch == 0)
+			return ParseResultPtr();
+		if (ch != c)
+			return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
 		return ParseResultPtr();
-	if (ch != c)
-		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
-	return ParseResultPtr();
-  }
-  int c;
+	}
+	int c;
 };
 // When a character must not be a given character, this object represents
 // testing for a character code established at compile time.
 template <int c> struct tnotch : public ParserBase
 {
-  tnotch() {}
-  ParseResult* parse(ParseState* start)
-  {
-	int ch = start->at(0);
-	if (ch == 0)
+	tnotch() {}
+	ParseResult* parse(ParseState* start)
+	{
+		int ch = start->at(0);
+		if (ch == 0)
+			return ParseResultPtr();
+		if (ch != c)
+			return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
 		return ParseResultPtr();
-	if (ch != c)
-		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
-	return ParseResultPtr();
-  }
+	}
 };
 
 bool showFails = false;

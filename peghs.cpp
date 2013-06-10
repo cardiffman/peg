@@ -14,251 +14,252 @@ using std::shared_ptr;
 using std::cout;
 using std::endl;
 
-	struct ConID : public ParserBase
+struct ConID : public ParserBase
+{
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-		ParseResultPtr parse(const ParseStatePtr& start)
+		size_t ic = 0;
+		if (start->length() > 0 && isalpha(start->at(0)) && isupper(start->at(0)))
 		{
-			size_t ic = 0;
-			if (start->length() > 0 && isalpha(start->at(0)) && isupper(start->at(0)))
-			{
+			++ic;
+			while (start->length() > ic && (isalnum(start->at(ic)) || start->at(ic)=='.'))
 				++ic;
-				while (start->length() > ic && (isalnum(start->at(ic)) || start->at(ic)=='.'))
-					++ic;
-				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
-			}
-			return ParseResultPtr();
+			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 		}
-	};
-	bool reservedid(const string& sym)
-	{
-		return sym=="case"||sym=="class"||sym=="data"||sym=="default"||
+		return ParseResultPtr();
+	}
+};
+bool reservedid(const string& sym)
+{
+	return sym=="case"||sym=="class"||sym=="data"||sym=="default"||
 			sym=="deriving"||sym=="do"||sym=="else"||sym=="foreign"||
 			sym=="if"||sym=="import"||sym=="in"||sym=="infix"||sym=="infixl"||
 			sym=="infixr"||sym=="instance"||sym=="let"||sym=="module"||
 			sym=="newtype"||sym=="of"||sym=="then"||sym=="type"||sym=="where"||
 			sym=="_";
-	}
-	struct VarID : public ParserBase
+}
+struct VarID : public ParserBase
+{
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-		ParseResultPtr parse(const ParseStatePtr& start)
+		size_t ic = 0;
+		if (start->length() > 0 && isalpha(start->at(0)) && islower(start->at(0)))
 		{
-			size_t ic = 0;
-			if (start->length() > 0 && isalpha(start->at(0)) && islower(start->at(0)))
-			{
+			++ic;
+			while (start->length() > ic && (isalnum(start->at(ic))))
 				++ic;
-				while (start->length() > ic && (isalnum(start->at(ic))))
-					++ic;
-				if (reservedid(start->substr(0,ic)))
-					return ParseResultPtr();
-				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
-			}
-			return ParseResultPtr();
+			if (reservedid(start->substr(0,ic)))
+				return ParseResultPtr();
+			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 		}
-	};
-	bool reservedOp(const string& sym)
-	{
-		/// .. | : | :: | = | \ | | | <- | -> |  @ | ~ | =>
-		// length 2 --- .. | :: | <- | -> | =>
-		// length 1 --- : | = | \ | | | @ | ~
-		switch (sym.length())
-		{
-		default:
-			return false;
-		case 1:
-			switch (sym[0])
-			{
-			case ':': case '=': case '\\': case '|': case '@': case '~':
-				return true;
-			}
-			return false;
-		case 2:
-			if (sym[0]=='.' && sym[1]=='.')
-				return true;
-			if (sym[0]==':' && sym[1]==':')
-				return true;
-			if (sym[0]=='<' && sym[1]=='-')
-				return true;
-			if (sym[1]=='>' && (sym[0]=='-' || sym[0]=='='))
-				return true;
-			return false;
-		}
-		return false;
+		return ParseResultPtr();
 	}
-	bool asciiSymbolChar(int ch) 
+};
+bool reservedOp(const string& sym)
+{
+	/// .. | : | :: | = | \ | | | <- | -> |  @ | ~ | =>
+	// length 2 --- .. | :: | <- | -> | =>
+	// length 1 --- : | = | \ | | | @ | ~
+	switch (sym.length())
 	{
-		switch (ch) {
-		case '!': case '#': case '$': case '%': case '&': case '*': case '+': case '.': case '/': case '<': case '=': case '>': case '?': case '@': case '\\': case '^': case '|': case '-': case '~': case ':': 
+	default:
+		return false;
+	case 1:
+		switch (sym[0])
+		{
+		case ':': case '=': case '\\': case '|': case '@': case '~':
 			return true;
 		}
 		return false;
-	}
-	bool asciiSymbolCharExceptColon(int ch) 
-	{
-		switch (ch) {
-		case '!': case '#': case '$': case '%': case '&': case '*': case '+': case '.': case '/': case '<': case '=': case '>': case '?': case '@': case '\\': case '^': case '|': case '-': case '~': 
+	case 2:
+		if (sym[0]=='.' && sym[1]=='.')
 			return true;
-		}
+		if (sym[0]==':' && sym[1]==':')
+			return true;
+		if (sym[0]=='<' && sym[1]=='-')
+			return true;
+		if (sym[1]=='>' && (sym[0]=='-' || sym[0]=='='))
+			return true;
 		return false;
 	}
-	struct ReservedOp : public ParserBase
+	return false;
+}
+bool asciiSymbolChar(int ch)
+{
+	switch (ch) {
+	case '!': case '#': case '$': case '%': case '&': case '*': case '+': case '.': case '/': case '<': case '=': case '>': case '?': case '@': case '\\': case '^': case '|': case '-': case '~': case ':':
+		return true;
+	}
+	return false;
+}
+bool asciiSymbolCharExceptColon(int ch)
+{
+	switch (ch) {
+	case '!': case '#': case '$': case '%': case '&': case '*': case '+': case '.': case '/': case '<': case '=': case '>': case '?': case '@': case '\\': case '^': case '|': case '-': case '~':
+		return true;
+	}
+	return false;
+}
+struct ReservedOp : public ParserBase
+{
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-		ParseResultPtr parse(const ParseStatePtr& start)
+		size_t ic = 0;
+		if (start->length() > 0 && asciiSymbolChar(start->at(0)))
 		{
-			size_t ic = 0;
-			if (start->length() > 0 && asciiSymbolChar(start->at(0)))
-			{
+			++ic;
+			while (start->length() > ic && (asciiSymbolChar(start->at(0))))
 				++ic;
-				while (start->length() > ic && (asciiSymbolChar(start->at(0))))
-					++ic;
-				if (!reservedOp(start->substr(0,ic)))
-					return ParseResultPtr();
-				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
-			}
-			return ParseResultPtr();
+			if (!reservedOp(start->substr(0,ic)))
+				return ParseResultPtr();
+			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 		}
-	}; 
-	struct VarSym : public ParserBase
+		return ParseResultPtr();
+	}
+};
+struct VarSym : public ParserBase
+{
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-		ParseResultPtr parse(const ParseStatePtr& start)
+		size_t ic = 0;
+		if (start->length() > 0 && asciiSymbolCharExceptColon(start->at(0)))
 		{
-			size_t ic = 0;
-			if (start->length() > 0 && asciiSymbolCharExceptColon(start->at(0)))
-			{
+			++ic;
+			while (start->length() > ic && (asciiSymbolChar(start->at(ic))))
 				++ic;
-				while (start->length() > ic && (asciiSymbolChar(start->at(ic))))
-					++ic;
-				//cout << "tentative VarSym [" << start->substr(0,ic) << ']' << endl;
-				if (reservedOp(start->substr(0,ic)))
-				{
-					//cout << "reservedop NOT VarSym [" << start->substr(0,ic) << ']' << endl;
-					return ParseResultPtr();
-				}
-				cout << "VarSym [" << start->substr(0,ic) << ']' << endl;
-				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
+			//cout << "tentative VarSym [" << start->substr(0,ic) << ']' << endl;
+			if (reservedOp(start->substr(0,ic)))
+			{
+				//cout << "reservedop NOT VarSym [" << start->substr(0,ic) << ']' << endl;
+				return ParseResultPtr();
 			}
-			return ParseResultPtr();
+			cout << "VarSym [" << start->substr(0,ic) << ']' << endl;
+			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 		}
-	}; 
-	struct ConSym : public ParserBase
+		return ParseResultPtr();
+	}
+};
+struct ConSym : public ParserBase
+{
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-		ParseResultPtr parse(const ParseStatePtr& start)
+		size_t ic = 0;
+		if (start->length() > 0 && start->at(0)==':')
 		{
-			size_t ic = 0;
-			if (start->length() > 0 && start->at(0)==':')
-			{
+			++ic;
+			while (start->length() > ic && (asciiSymbolChar(start->at(0))))
 				++ic;
-				while (start->length() > ic && (asciiSymbolChar(start->at(0))))
-					++ic;
-				if (reservedOp(start->substr(0,ic)))
-					return ParseResultPtr();
-				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
-			}
-			return ParseResultPtr();
+			if (reservedOp(start->substr(0,ic)))
+				return ParseResultPtr();
+			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 		}
-	}; 
+		return ParseResultPtr();
+	}
+};
 // Quoted strings in HTML can use either the single quote or
 // the double quote. HTML doesn't allow escaping the quoting
 // character but an entity &apos; or &quote; can be used.
 template <int quote> struct Quoted : public ParserBase
 {
-  Quoted() {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	size_t ic =0;
-	if (start->length() < 2)
-		return ParseResultPtr();
-	if (start->at(0) != quote)
-		return ParseResultPtr();
-	++ic;
-	while (ic < start->length()-1 && start->at(ic) != quote)
+	Quoted() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-	  ++ic;
+		size_t ic =0;
+		if (start->length() < 2)
+			return ParseResultPtr();
+		if (start->at(0) != quote)
+			return ParseResultPtr();
+		++ic;
+		while (ic < start->length()-1 && start->at(ic) != quote)
+		{
+			++ic;
+		}
+		if (start->at(ic) != quote)
+			return ParseResultPtr();
+		return make_shared<ParseResult>(start->from(ic), new StringAST(start->substr(0, ic)));
 	}
-	if (start->at(ic) != quote)
-		return ParseResultPtr();
-	return make_shared<ParseResult>(start->from(ic), new StringAST(start->substr(0, ic)));
-  }
 };
 
 
-    // module ::= 'module' name '(' exports ')' 'where' body
-	// body ::= '{' impdecls ';' topdecls '}'
-	// body ::= '{' impdecls '}'
-	// body ::= '{' topdecls '}'
-	// topdecls ::= topdecl (';' topdecl)*
-	// topdecl ::= topdecl-kw | decl
-	// decls ::= '{' decl (';' decl)* '}'
-	// decl ::= gendecl | (funlhs|pat) rhs
-	extern char module_kw[] = "module";
-	extern char where_kw[] = "where";
-	extern char qualified_kw[] = "qualified";
-	extern char import_kw[] = "import";
-	extern char as_kw[] = "as";
-	extern char hiding_kw[] = "hiding";
-	extern char let_kw[] = "let";
-	extern char in_kw[] = "in";
-	extern char if_kw[] = "if";
-	extern char then_kw[] = "then";
-	extern char else_kw[] = "else";
-	extern char case_kw[] = "case";
-	extern char of_kw[] = "of";
-	extern char do_kw[] = "do";
-	extern char type_kw[] = "type";
-	extern char data_kw[] = "data";
-	extern char newtype_kw[] = "newtype";
-	extern char class_kw[] = "class";
-	extern char instance_kw[] = "instance";
-	extern char default_kw[] = "default";
-	extern char foreign_kw[] = "foreign";
-	extern char deriving_kw[] = "deriving";
-	extern char safe_kw[] = "safe";
-	extern char unsafe_kw[] = "unsafe";
-	extern char ccall_kw[] = "ccall";
-	extern char stdcall_kw[] = "stdcall";
-	extern char cplusplus_kw[] = "cplusplus";
-	extern char jvm_kw[] = "jvm";
-	extern char dotnet_kw[] = "dotnet_kw";
-	extern char export_kw[] = "export";
-	typedef ttoken<module_kw> ModuleKw;
-	typedef ttoken<where_kw> WhereKw;
-	typedef ttoken<qualified_kw> QualifiedKW;
-	typedef ttoken<import_kw> ImportKW;
-	typedef ttoken<as_kw> AsKW;
-	typedef ttoken<hiding_kw> HidingKW;
-	typedef ttoken<let_kw> LetKW;
-	typedef ttoken<in_kw> InKW;
-	typedef ttoken<if_kw> IfKW;
-	typedef ttoken<then_kw> ThenKW;
-	typedef ttoken<else_kw> ElseKW;
-	typedef ttoken<case_kw> CaseKW;
-	typedef ttoken<of_kw> OfKW;
-	typedef ttoken<do_kw> DoKW;
-	typedef ttoken<type_kw> TypeKW;
-	typedef ttoken<data_kw> DataKW;
-	typedef ttoken<newtype_kw> NewtypeKW;
-	typedef ttoken<class_kw> ClassKW;
-	typedef ttoken<instance_kw> InstanceKW;
-	typedef ttoken<default_kw> DefaultKW;
-	typedef ttoken<foreign_kw> ForeignKW;
-	typedef ttoken<deriving_kw> DerivingKW;
-	typedef ttoken<safe_kw> SafeKW;
-	typedef ttoken<unsafe_kw> UnsafeKW;
-	typedef ttoken<ccall_kw> CcallKw;
-	typedef ttoken<stdcall_kw> StdcallKw;
-	typedef ttoken<cplusplus_kw> CplusplusKw;
-	typedef ttoken<jvm_kw> JvmKw;
-	typedef ttoken<dotnet_kw> DotnetKw;
-	typedef ttoken<export_kw> ExportKw;
-	extern const char colonColonStr[] = "::";
-	extern const char fnToStr[] = "->";
-	extern const char patFromStr[] = "<-";
-	extern const char dotdotStr[] = "..";
-	extern const char contextToStr[] = "=>";
-	typedef ttoken<colonColonStr> ColonColon;
-	typedef ttoken<fnToStr> FnTo;
-	typedef ttoken<dotdotStr> DotDot;
-	typedef ttoken<contextToStr> ContextTo;
-	typedef ttoken<patFromStr> PatFrom;
+// module ::= 'module' name '(' exports ')' 'where' body
+// body ::= '{' impdecls ';' topdecls '}'
+// body ::= '{' impdecls '}'
+// body ::= '{' topdecls '}'
+// topdecls ::= topdecl (';' topdecl)*
+// topdecl ::= topdecl-kw | decl
+// decls ::= '{' decl (';' decl)* '}'
+// decl ::= gendecl | (funlhs|pat) rhs
+extern char module_kw[] = "module";
+extern char where_kw[] = "where";
+extern char qualified_kw[] = "qualified";
+extern char import_kw[] = "import";
+extern char as_kw[] = "as";
+extern char hiding_kw[] = "hiding";
+extern char let_kw[] = "let";
+extern char in_kw[] = "in";
+extern char if_kw[] = "if";
+extern char then_kw[] = "then";
+extern char else_kw[] = "else";
+extern char case_kw[] = "case";
+extern char of_kw[] = "of";
+extern char do_kw[] = "do";
+extern char type_kw[] = "type";
+extern char data_kw[] = "data";
+extern char newtype_kw[] = "newtype";
+extern char class_kw[] = "class";
+extern char instance_kw[] = "instance";
+extern char default_kw[] = "default";
+extern char foreign_kw[] = "foreign";
+extern char deriving_kw[] = "deriving";
+extern char safe_kw[] = "safe";
+extern char unsafe_kw[] = "unsafe";
+extern char ccall_kw[] = "ccall";
+extern char stdcall_kw[] = "stdcall";
+extern char cplusplus_kw[] = "cplusplus";
+extern char jvm_kw[] = "jvm";
+extern char dotnet_kw[] = "dotnet_kw";
+extern char export_kw[] = "export";
+typedef ttoken<module_kw> ModuleKw;
+typedef ttoken<where_kw> WhereKw;
+typedef ttoken<qualified_kw> QualifiedKW;
+typedef ttoken<import_kw> ImportKW;
+typedef ttoken<as_kw> AsKW;
+typedef ttoken<hiding_kw> HidingKW;
+typedef ttoken<let_kw> LetKW;
+typedef ttoken<in_kw> InKW;
+typedef ttoken<if_kw> IfKW;
+typedef ttoken<then_kw> ThenKW;
+typedef ttoken<else_kw> ElseKW;
+typedef ttoken<case_kw> CaseKW;
+typedef ttoken<of_kw> OfKW;
+typedef ttoken<do_kw> DoKW;
+typedef ttoken<type_kw> TypeKW;
+typedef ttoken<data_kw> DataKW;
+typedef ttoken<newtype_kw> NewtypeKW;
+typedef ttoken<class_kw> ClassKW;
+typedef ttoken<instance_kw> InstanceKW;
+typedef ttoken<default_kw> DefaultKW;
+typedef ttoken<foreign_kw> ForeignKW;
+typedef ttoken<deriving_kw> DerivingKW;
+typedef ttoken<safe_kw> SafeKW;
+typedef ttoken<unsafe_kw> UnsafeKW;
+typedef ttoken<ccall_kw> CcallKw;
+typedef ttoken<stdcall_kw> StdcallKw;
+typedef ttoken<cplusplus_kw> CplusplusKw;
+typedef ttoken<jvm_kw> JvmKw;
+typedef ttoken<dotnet_kw> DotnetKw;
+typedef ttoken<export_kw> ExportKw;
+extern const char colonColonStr[] = "::";
+extern const char fnToStr[] = "->";
+extern const char patFromStr[] = "<-";
+extern const char dotdotStr[] = "..";
+extern const char contextToStr[] = "=>";
+typedef ttoken<colonColonStr> ColonColon;
+typedef ttoken<fnToStr> FnTo;
+typedef ttoken<dotdotStr> DotDot;
+typedef ttoken<contextToStr> ContextTo;
+typedef ttoken<patFromStr> PatFrom;
+
 void hs()
 {
 	auto moduleKw = make_shared<ModuleKw>();// moduleKw;
