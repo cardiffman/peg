@@ -1,3 +1,8 @@
+20130609b:
+Finished the Makefile. Now G++ 4.5.3 with --std=c++0x compiles the program.
+The test programs are built AND executed with "make test". The makefile isn't
+super smart about headers or cleaning.
+
 20130609:
 Reorg the test code into separate programs for each test grammar. The interesting
 equations grammar remains in peg.cpp for now.
