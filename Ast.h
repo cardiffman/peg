@@ -2,8 +2,7 @@
 #define INCLUDED_AST_H
 
 #include <string>
-#include <iostream>
-#include <sstream>
+#include <iosfwd>
 #include <vector>
 
 class AST
@@ -12,16 +11,13 @@ public:
 	AST() {}
 	virtual ~AST() {}
 	virtual std::string to_string() const = 0;
-	/*AST(const string& s) : s(s) {}
-	string s;
-	vector<AST*> ast;*/
 	friend std::ostream& operator<<(std::ostream& os, const AST& ast);
 };
 class IntegerAST : public AST
 {
 public:
 	IntegerAST(int value) : value(value) {}
-	std::string to_string() const { std::ostringstream os; os << value; return os.str(); }
+	std::string to_string() const;
 private:
 	int value;
 };
@@ -46,16 +42,7 @@ class SequenceAST : public AST
 public:
 	SequenceAST() {}
 	void append(AST* ast) { members.push_back(ast); }
-	std::string to_string() const 
-	{
-		std::ostringstream os;
-		if (members.size())
-			os << '[' << members[0]->to_string();
-		for (size_t i=1; i<members.size(); ++i)
-			os << ' ' << members[i]->to_string();
-		os << ']';
-		return os.str();
-	}
+	std::string to_string() const ;
 private:
 	std::vector<AST*> members;
 };

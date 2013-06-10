@@ -28,16 +28,6 @@ using std::pair;
 using std::shared_ptr;
 using std::make_shared;
 int parser_id_gen = 0;
-/*static*/
-ParseState::Memos ParseState::memos;
-
-ostream& operator<<(ostream& os, ParseState& ps)
-{
-  if (ps.index >= ps.input.size())
-	return os << "";
-	return os << ps.input.substr(ps.index);
-}
-
 ostream& operator<<(ostream& os, const AST& ast)
 {
 	os << ast.to_string();
@@ -66,24 +56,6 @@ struct token : public ParserBase
   string match;
 };
 
-// This ID is like many identifiers in many languages but it is supposed
-// to represent most closely the HTML or XML id concept.
-struct ID : public ParserBase
-{
-  ID() {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	size_t ic = 0;
-	if (start->length() > 0 && isalpha(start->at(0)))
-	{
-	  ++ic;
-	  while (start->length() > ic && isalnum(start->at(ic)))
-		++ic;
-	  return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
-	}
-	return 0;
-  }
-};
 // When a character can be from a large set such as a-z this object
 // represents testing for a range established at construction time.
 struct range : public ParserBase
@@ -98,21 +70,6 @@ struct range : public ParserBase
   }
   int rangeBegin;
   int rangeEnd;
-};
-// When a character can be from a large set such as a-z this object
-// represents testing for a range established at compile time. It is 
-// interesting how much this bloats the names of templates that combine
-// with this template.
-template<int rangeBegin, int rangeEnd> struct trange : public ParserBase
-{
-  trange() {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	int ch = start->at(0);
-	if (ch >= rangeBegin && ch <= rangeEnd)
-		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
-	return 0;
-  }
 };
 // When a character has to be a given character, this object represents
 // testing for a character code established at runtime.
@@ -183,44 +140,17 @@ template <typename Parser> struct isnt : public ParserBase
 
 void foo()
 {
+  // Leave this in peg.cpp. It's for compile-time.
   auto kw = make_shared<token>("kw");
   auto kws = Repeat1("kws",kw);
-  ParseResultPtr pr = (*kws)(0);
+  ParseResultPtr pr = (*kws)(0); // Not valid input.
   auto kws0 = Repeat0(kw);
-  pr = (*kws0)(0);
+  pr = (*kws0)(0); // Not valid input.
   typedef Skipwhite<token> SWToken;
   SWToken swToken(kw);
-  pr = swToken(0);
+  pr = swToken(0); // Not valid input.
   auto tokens2 = kw && kw;
-  pr = (*tokens2)(0);
-}
-
-shared_ptr<ParserBase> x()
-{
-	auto digits = make_shared<trange<'0','9'>>();// digits;
-	auto lc = make_shared<trange<'a','z'>>();// lc;
-	auto uc = make_shared<trange<'A','Z'>>();// uc;
-	auto letters = lc || uc;
-	auto p = Repeat0(digits || letters);
-	return p;
-}
-
-template <typename a> 
-Skipwhite<a> whiteskip(a p) 
-{ 
-	return Skipwhite<a>(p); 
-}
-
-shared_ptr<ParserBase> y()
-{
-	ID anID; NUM aNUM;
-	static auto id = make_shared<ID>();// ID id;
-	static auto num = make_shared<NUM>();//NUM num;
-	static auto operators = make_shared<tch<'+'>>()||make_shared<tch<'*'>>()||make_shared<tch<'/'>>();
-	//static Skipwhite<choice2<choice2<tch<'+'>,tch<'*'>>,tch<'/'>>> woperators = 
-	static auto rhs = SkipWhite(id || num) && Repeat0(SkipWhite(operators) && (SkipWhite(id || num)));
-	static auto p = SkipWhite(id) && Repeat0(SkipWhite(id)) && SkipWhite(make_shared<tch<'='>>()) && rhs;
-	return p;
+  pr = (*tokens2)(0); // Not valid input.
 }
 
 
@@ -255,50 +185,6 @@ shared_ptr<ParserBase> y()
 			
 void tests()
 {
-	shared_ptr<ParserBase> p = x();
-	string input1("12345ABCDabcd");
-	ParseState::reset();
-	ParseStatePtr st = make_shared<ParseState>(input1);
-	ParseResultPtr r = (*p)(st);
-	if (r)
-	{
-		cout << "r [" << *r->remaining << ']' << endl;
-		cout << "AST " << *r->ast;
-		cout << endl;
-	}
-	else
-	{
-		cout << "r==null" << endl;
-	}
-	string input1b("x = a + b + c * 9 + 10 * d");
-	ParseState::reset();
-	ParseStatePtr st1b = make_shared<ParseState>(input1b);
-	r = (*y())(st1b);
-	if (r)
-	{
-		cout << "r [" << *r->remaining << ']' << endl;
-		cout << "AST " << *r->ast;
-		cout << endl;
-	}
-	else
-	{
-		cout << "r==null" << endl;
-	}
-	string input1c("hypot o a = o * o + a * a");
-	ParseState::reset();
-	ParseStatePtr st1c = make_shared<ParseState>(input1c);
-	r = (*y())(st1c);
-
-	if (r)
-	{
-		cout << "r [" << *r->remaining << ']' << endl;
-		cout << "AST " << *r->ast;
-		cout << endl;
-	}
-	else
-	{
-		cout << "r==null" << endl;
-	}
 	//typedef trange<32, 0x1FFFF> AnyChar;
 	//AnyChar anyChar;
 	//typedef repeat0<AnyChar> Anything;

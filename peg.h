@@ -43,6 +43,22 @@ template <int c> struct tch : public ParserBase
   }
 };
 
+// When a character can be from a large set such as a-z this object
+// represents testing for a range established at compile time. It is 
+// interesting how much this bloats the names of templates that combine
+// with this template.
+template<int rangeBegin, int rangeEnd> struct trange : public ParserBase
+{
+  trange() {}
+  ParseResultPtr parse(const ParseStatePtr& start)
+  {
+	int ch = start->at(0);
+	if (ch >= rangeBegin && ch <= rangeEnd)
+		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
+	return 0;
+  }
+};
+
 template <typename Parser> ParseResultPtr skipwhite(const ParseStatePtr& start, const std::shared_ptr<Parser>& next)
 {
 	size_t i;
@@ -371,6 +387,25 @@ template <typename P1, typename P2>
 	{
 		return std::make_shared<rLoop<P1,P2,true>>(name, p1, p2);
 	}
+
+// This ID is like many identifiers in many languages but it is supposed
+// to represent most closely the HTML or XML id concept.
+struct ID : public ParserBase
+{
+  ID() {}
+  ParseResultPtr parse(const ParseStatePtr& start)
+  {
+	size_t ic = 0;
+	if (start->length() > 0 && isalpha(start->at(0)))
+	{
+	  ++ic;
+	  while (start->length() > ic && isalnum(start->at(ic)))
+		++ic;
+	  return std::make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
+	}
+	return 0;
+  }
+};
 
 void tests();
 

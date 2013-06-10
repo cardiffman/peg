@@ -343,23 +343,8 @@ void hs()
 	auto infixexpRef = make_shared<ParserReference>();
 	auto expRefComma = RLoop("expRefComma",expRef,comma);
 	auto fbind = (make_shared<WSequenceN>("fbind") && qvar && equals && expRef);
-	auto aexp = varID  
-				|| gcon
-				|| hliteral
-				|| (make_shared<WSequenceN>("(exp)") && lparen && expRef && rparen)
-				|| (make_shared<WSequenceN>("(exp,exp)") && lparen && expRefComma && rparen)
-				|| (make_shared<WSequenceN>("[exp,exp]") && lbracket && expRefComma && rbracket)
-				||(make_shared<WSequenceN>("[exp,exp..exp]") && lbracket && expRef && Optional((make_shared<WSequenceN>(",exp") && comma,expRef)) && dotdot && expRef && rbracket)
-				//||(make_shared<WSequenceN>("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop(qual,comma) && rbracket)
-				||(make_shared<WSequenceN>("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
-				||(make_shared<WSequenceN>("(qop<-> infixexp)") && lparen && qop && infixexpRef && rparen)
-				||(make_shared<WSequenceN>("qcon{fbind+}") && qcon && lbrace && Repeat1("fbind+",fbind) && rbrace)
-				;
-	aexp->name = "aexp";
 	auto fexpRef = make_shared<ParserReference>();
-	//auto fexp = WSequence(Optional(fexpRef),aexp);
-	auto fexp = Repeat1("fexp",SkipWhite(aexp));
-	fexpRef->resolve(fexp);
+	auto aexpRef = make_shared<ParserReference>();
 	auto declsRef = make_shared<ParserReference>();
 	auto patRef = make_shared<ParserReference>();// patRef;
 	auto wheres = (make_shared<WSequenceN>("where decls") && whereKw && declsRef);
@@ -382,13 +367,13 @@ void hs()
 							;
 	auto stmts = (make_shared<WSequenceN>("stmts") && Repeat1("stmt+",SkipWhite(stmt)) && expRef && Optional(semicolon));
 	auto lexp = make_shared<Choices>("lexp")
-						||(make_shared<WSequenceN>("lambdaabs") && make_shared<tch<'\\'>>() && Repeat1("\\aexp+",SkipWhite(aexp)) && fnTo && expRef)
+						||(make_shared<WSequenceN>("lambdaabs") && make_shared<tch<'\\'>>() && Repeat1("\\aexp+",SkipWhite(aexpRef)) && fnTo && expRef)
 						||(make_shared<Choices>("lexp-kw")
 							|| (make_shared<WSequenceN>("let") && letKw && declsRef && inKw && expRef)
 							||(make_shared<WSequenceN>("if") && ifKw && expRef && Optional(semicolon) && (make_shared<WSequenceN>("ifthen") && thenKw && expRef && Optional(semicolon)) && (make_shared<WSequenceN>("ifelse") && elseKw && expRef))
 							||(make_shared<WSequenceN>("case") && caseKw && expRef && ofKw && alts)
 							||(make_shared<WSequenceN>("do") && doKw && lbrace && stmts && rbrace))
-						||fexp
+						||fexpRef
 						;
 	auto infixexp = make_shared<Choices>("infixexp")
 						|| (make_shared<WSequenceN>("lexp,qop,infixexp") && lexp && qop && infixexpRef)
@@ -411,6 +396,8 @@ void hs()
 	auto exp = (make_shared<WSequenceN>("exp") && infixexpRef && Optional((make_shared<WSequenceN>("typesig") && colonColon && Optional((make_shared<WSequenceN>("context") && context && contextTo)) && typeRef))) ;
 	infixexpRef->resolve(infixexp);
 	expRef->resolve(exp);
+
+
 	auto rhs = (make_shared<WSequenceN>("rhs") && equals && exp);
 	auto tycon = conID;
 	auto qtycon = tycon;
@@ -484,6 +471,28 @@ void hs()
 						||(make_shared<WSequenceN>("funlhs|pat rhs") && (make_shared<Choices>("funlhs|pat") ||funlhs ||pat) && rhs)
 						;
 	auto decls = RLoop("decls",decl,semicolon);
+	auto qual = make_shared<Choices>("qual")
+				|| pat && patFrom && expRef
+				|| letKw && decls
+				|| expRef
+				;
+	auto aexp = varID  
+				|| gcon
+				|| hliteral
+				|| (make_shared<WSequenceN>("(exp)") && lparen && expRef && rparen)
+				|| (make_shared<WSequenceN>("(exp,exp)") && lparen && expRefComma && rparen)
+				|| (make_shared<WSequenceN>("[exp,exp]") && lbracket && expRefComma && rbracket)
+				||(make_shared<WSequenceN>("[exp,exp..exp]") && lbracket && expRef && Optional((make_shared<WSequenceN>(",exp") && comma && expRef)) && dotdot && expRef && rbracket)
+				||(make_shared<WSequenceN>("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop("qual,",qual,comma) && rbracket)
+				||(make_shared<WSequenceN>("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
+				||(make_shared<WSequenceN>("(qop<-> infixexp)") && lparen && qop && infixexpRef && rparen)
+				||(make_shared<WSequenceN>("qcon{fbind+}") && qcon && lbrace && Repeat1("fbind+",fbind) && rbrace)
+				;
+	aexp->name = "aexp";
+	aexpRef->resolve(aexp);
+	//auto fexp = WSequence(Optional(fexpRef),aexp);
+	auto fexp = Repeat1("fexp",SkipWhite(aexp));
+	fexpRef->resolve(fexp);
 	auto exclam = make_shared<tch<'!'>>();
 	auto vars = RLoop("vars",var,comma);
 	auto fielddecl = vars && colonColon && (type || (exclam && atype));
