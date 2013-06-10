@@ -51,7 +51,7 @@ struct token : public ParserBase
 
 		  return make_shared<ParseResult>(start->from(match.length()), new IdentifierAST(match));
 	}
-	return 0;
+	return ParseResultPtr();
   }
   string match;
 };
@@ -66,7 +66,7 @@ struct range : public ParserBase
 	int ch = start->at(0);
 	if (ch >= rangeBegin && ch <= rangeEnd)
 		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
-	return 0;
+	return ParseResultPtr();
   }
   int rangeBegin;
   int rangeEnd;
@@ -81,7 +81,7 @@ struct ch : public ParserBase
 	int ch = start->at(0);
 	if (ch == c)
 		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
-	return 0;
+	return ParseResultPtr();
   }
   int c;
 };
@@ -94,10 +94,10 @@ struct notch : public ParserBase
   {
 	int ch = start->at(0);
 	if (ch == 0)
-	  return 0;
+		return ParseResultPtr();
 	if (ch != c)
 		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
-	return 0;
+	return ParseResultPtr();
   }
   int c;
 };
@@ -110,10 +110,10 @@ template <int c> struct tnotch : public ParserBase
   {
 	int ch = start->at(0);
 	if (ch == 0)
-	  return 0;
+		return ParseResultPtr();
 	if (ch != c)
-		return make_shared<ParseResult>(start->from(1), new AST(string(1, ch)));
-	return 0;
+		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
+	return ParseResultPtr();
   }
 };
 
@@ -132,7 +132,7 @@ template <typename Parser> struct isnt : public ParserBase
 	ParseResultPtr rep = next(start);
 	if (!rep)
 		return start; // don't advance, but do succeed
-	return 0
+	return ParseResultPtr();
   }
   Parser& next;
 };
@@ -143,14 +143,14 @@ void foo()
   // Leave this in peg.cpp. It's for compile-time.
   auto kw = make_shared<token>("kw");
   auto kws = Repeat1("kws",kw);
-  ParseResultPtr pr = (*kws)(0); // Not valid input.
+  ParseResultPtr pr = (*kws)(ParseStatePtr()); // Not valid input.
   auto kws0 = Repeat0(kw);
-  pr = (*kws0)(0); // Not valid input.
+  pr = (*kws0)(ParseStatePtr()); // Not valid input.
   typedef Skipwhite<token> SWToken;
   SWToken swToken(kw);
-  pr = swToken(0); // Not valid input.
+  pr = swToken(ParseStatePtr()); // Not valid input.
   auto tokens2 = kw && kw;
-  pr = (*tokens2)(0); // Not valid input.
+  pr = (*tokens2)(ParseStatePtr()); // Not valid input.
 }
 
 

@@ -21,6 +21,6 @@ public:
   int parser_id;
   static int parser_id_gen;
 };
-typedef std::tr1::shared_ptr<ParserBase> ParserPtr;
+typedef std::shared_ptr<ParserBase> ParserPtr;
 
 #endif // INCLUDED_PARSERBASE_H

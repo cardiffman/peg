@@ -26,7 +26,7 @@ using std::endl;
 					++ic;
 				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 			}
-			return 0;
+			return ParseResultPtr();
 		}
 	};
 	bool reservedid(const string& sym)
@@ -49,10 +49,10 @@ using std::endl;
 				while (start->length() > ic && (isalnum(start->at(ic))))
 					++ic;
 				if (reservedid(start->substr(0,ic)))
-					return false;
+					return ParseResultPtr();
 				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 			}
-			return 0;
+			return ParseResultPtr();
 		}
 	};
 	bool reservedOp(const string& sym)
@@ -111,10 +111,10 @@ using std::endl;
 				while (start->length() > ic && (asciiSymbolChar(start->at(0))))
 					++ic;
 				if (!reservedOp(start->substr(0,ic)))
-					return false;
+					return ParseResultPtr();
 				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 			}
-			return 0;
+			return ParseResultPtr();
 		}
 	}; 
 	struct VarSym : public ParserBase
@@ -131,12 +131,12 @@ using std::endl;
 				if (reservedOp(start->substr(0,ic)))
 				{
 					//cout << "reservedop NOT VarSym [" << start->substr(0,ic) << ']' << endl;
-					return 0;
+					return ParseResultPtr();
 				}
 				cout << "VarSym [" << start->substr(0,ic) << ']' << endl;
 				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 			}
-			return 0;
+			return ParseResultPtr();
 		}
 	}; 
 	struct ConSym : public ParserBase
@@ -150,10 +150,10 @@ using std::endl;
 				while (start->length() > ic && (asciiSymbolChar(start->at(0))))
 					++ic;
 				if (reservedOp(start->substr(0,ic)))
-					return false;
+					return ParseResultPtr();
 				return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
 			}
-			return 0;
+			return ParseResultPtr();
 		}
 	}; 
 // Quoted strings in HTML can use either the single quote or
@@ -166,16 +166,16 @@ template <int quote> struct Quoted : public ParserBase
   {
 	size_t ic =0;
 	if (start->length() < 2)
-	  return 0;
+		return ParseResultPtr();
 	if (start->at(0) != quote)
-	  return 0;
+		return ParseResultPtr();
 	++ic;
 	while (ic < start->length()-1 && start->at(ic) != quote)
 	{
 	  ++ic;
 	}
 	if (start->at(ic) != quote)
-	  return 0;
+		return ParseResultPtr();
 	return make_shared<ParseResult>(start->from(ic), new StringAST(start->substr(0, ic)));
   }
 };
