@@ -1,3 +1,10 @@
+20130616:
+Updated the Makefile to build a debugging executable and to use -MMD to track
+the headers. Found that a few of the parsers, especially optional<t>, were
+rewriting the ParseResult's of successful parses with different AST's, which
+screwed up memoization. So the accessibility of ParseResults was reformed and
+a convenience method was created to keep this from being an issue any more.
+
 20130609b:
 Finished the Makefile. Now G++ 4.5.3 with --std=c++0x compiles the program.
 The test programs are built AND executed with "make test". The makefile isn't
