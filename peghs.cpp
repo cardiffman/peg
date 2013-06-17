@@ -1,6 +1,7 @@
 #include "peg.h"
 #include "ParseState.h"
 #include "Ast.h"
+#include "Action.h"
 
 #include <utility>
 #include <memory>
@@ -24,7 +25,7 @@ struct ConID : public ParserBase
 			++ic;
 			while (start->length() > ic && (isalnum(start->at(ic)) || start->at(ic)=='.'))
 				++ic;
-			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
+			return make_shared<ParseResult>(start->from(ic), std::make_shared<IdentifierAST>(start->substr(0, ic)));
 		}
 		return ParseResultPtr();
 	}
@@ -50,7 +51,7 @@ struct VarID : public ParserBase
 				++ic;
 			if (reservedid(start->substr(0,ic)))
 				return ParseResultPtr();
-			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
+			return make_shared<ParseResult>(start->from(ic), std::make_shared<IdentifierAST>(start->substr(0, ic)));
 		}
 		return ParseResultPtr();
 	}
@@ -112,7 +113,7 @@ struct ReservedOp : public ParserBase
 				++ic;
 			if (!reservedOp(start->substr(0,ic)))
 				return ParseResultPtr();
-			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
+			return make_shared<ParseResult>(start->from(ic), std::make_shared<IdentifierAST>(start->substr(0, ic)));
 		}
 		return ParseResultPtr();
 	}
@@ -134,7 +135,7 @@ struct VarSym : public ParserBase
 				return ParseResultPtr();
 			}
 			cout << "VarSym [" << start->substr(0,ic) << ']' << endl;
-			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
+			return make_shared<ParseResult>(start->from(ic), std::make_shared<IdentifierAST>(start->substr(0, ic)));
 		}
 		return ParseResultPtr();
 	}
@@ -151,7 +152,7 @@ struct ConSym : public ParserBase
 				++ic;
 			if (reservedOp(start->substr(0,ic)))
 				return ParseResultPtr();
-			return make_shared<ParseResult>(start->from(ic), new IdentifierAST(start->substr(0, ic)));
+			return make_shared<ParseResult>(start->from(ic), std::make_shared<IdentifierAST>(start->substr(0, ic)));
 		}
 		return ParseResultPtr();
 	}
@@ -176,9 +177,71 @@ template <int quote> struct Quoted : public ParserBase
 		}
 		if (start->at(ic) != quote)
 			return ParseResultPtr();
-		return make_shared<ParseResult>(start->from(ic), new StringAST(start->substr(0, ic)));
+		return make_shared<ParseResult>(start->from(ic), std::make_shared<StringAST>(start->substr(0, ic)));
 	}
 };
+
+shared_ptr<Choices> ChoicesName(const std::string& name)
+								{
+	shared_ptr<Choices> r = make_shared<Choices>(name);
+	return r;
+								}
+shared_ptr<WSequenceN> SequenceName(const std::string& name)
+		{
+	shared_ptr<WSequenceN> r = make_shared<WSequenceN>(name);
+	return r;
+		}
+
+// When you want a parse's failure to be a good thing.
+// This parser does not "consume" input.
+#if 0
+template <typename Parser> struct isnt : public ParserBase
+{
+	isnt(const shared_ptr<Parser>& next) : next(next) {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		ParseResultPtr rep = (*next)(start);
+		if (!rep) // don't advance, but do succeed
+			return make_shared<ParseResult>(start->from(0), std::make_shared<StringAST>(""));
+		return ParseResultPtr(); // whatever it is, is present, so fail.
+	}
+	shared_ptr<Parser> next;
+};
+template <typename Parser> shared_ptr<isnt<Parser>> Isnt(const shared_ptr<Parser>& parser)
+		{
+	return make_shared<isnt<Parser>>(parser);
+		}
+#else
+struct isnt : public ParserBase
+{
+	isnt(const shared_ptr<ParserBase>& next) : next(next) {}
+	static int recur;
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		if (recur== next->parser_id || recur != 0)
+		{
+			cout << __PRETTY_FUNCTION__ << " Recursion? " << endl;
+			return ParseResultPtr();
+		}
+		recur = next->parser_id;
+		ParseResultPtr rep = (*next)(start);
+		if (!rep) // don't advance, but do succeed
+		{
+			recur = 0;
+			return make_shared<ParseResult>(start->from(0), std::make_shared<StringAST>(""));
+		}
+		cout << __PRETTY_FUNCTION__ << " Is failing! " << rep->getAST() << endl;
+		recur = 0;
+		return ParseResultPtr(); // whatever it is, is present, so fail.
+	}
+	shared_ptr<ParserBase> next;
+};
+int isnt::recur=0;
+shared_ptr<ParserBase> Isnt(const shared_ptr<ParserBase>& parser)
+		{
+	return make_shared<isnt>(parser);
+		}
+#endif
 
 
 // module ::= 'module' name '(' exports ')' 'where' body
@@ -260,6 +323,43 @@ typedef ttoken<dotdotStr> DotDot;
 typedef ttoken<contextToStr> ContextTo;
 typedef ttoken<patFromStr> PatFrom;
 
+class DeclAST : public AST
+{
+public:
+	string to_string() const;
+};
+ASTPtr Decl(const ASTPtr& ast)
+{
+	cout << __PRETTY_FUNCTION__ << endl;
+	SequenceAST* sequence = dynamic_cast<SequenceAST*>(ast.get());
+	if (sequence)
+	{
+		cout << "Decl 0: " << sequence->at(0)->to_string() << endl;
+		if (sequence->size()>1)
+		cout << "Decl 1: " << sequence->at(1)->to_string() << endl;
+	}
+	else
+	{
+		cout << "Decl that's not a sequence: " << ast->to_string() << endl;
+	}
+	return ast;
+}
+ASTPtr LetClause(const ASTPtr& ast)
+{
+	cout << __PRETTY_FUNCTION__ << endl;
+	SequenceAST* sequence = dynamic_cast<SequenceAST*>(ast.get());
+	if (sequence)
+	{
+		cout << "Let 0: " << sequence->at(0)->to_string() << endl;
+		if (sequence->size()>1)
+		cout << "Let 1: " << sequence->at(1)->to_string() << endl;
+	}
+	else
+	{
+		cout << "Let that's not a sequence: " << ast->to_string() << endl;
+	}
+	return ast;
+}
 void hs()
 {
 	auto moduleKw = make_shared<ModuleKw>();// moduleKw;
@@ -316,9 +416,9 @@ void hs()
 	auto patFrom = make_shared<PatFrom>();
 	auto contextTo = make_shared<ContextTo>();
 	auto dotdot = make_shared<DotDot>();
-	auto exportItem = make_shared<Choices>("exportItem") || varID || conID;
+	auto exportItem = ChoicesName("exportItem") || varID || conID;
 	auto exportComma = RLoop("exportComma",exportItem,comma);
-	auto exports = (make_shared<WSequenceN>("exports") && lparen && exportComma && rparen);
+	auto exports = (SequenceName("exports") && lparen && exportComma && rparen);
 	auto varsym = make_shared<VarSym>();// varsym;
 	auto consym = make_shared<ConSym>();// consym;
 	auto hliteral = make_shared<NUM>() || make_shared<Quoted<'\''>>() || make_shared<Quoted<'"'>>();
@@ -327,58 +427,60 @@ void hs()
 	auto varop = varsym || (backTick && varID && backTick);
 	varop->name = "varop";
 	//auto conop = Choice("conop",consym,WSequence("conIDop",backTick,conID,backTick));
-	auto conop = make_shared<Choices>("conop") || consym || (make_shared<WSequenceN>("conIDop") && backTick && conID && backTick);
-	auto qop = make_shared<Choices>("qop")|| varop || conop;
-	auto unit = (make_shared<WSequenceN>("unit") && lparen && rparen);
-	auto elist = (make_shared<WSequenceN>("[]") && lbracket && rbracket);
-	auto etuple = (make_shared<WSequenceN>("etuple") && lparen && Repeat1(",",comma) && rparen);
-	auto efn = (make_shared<WSequenceN>("efn") && lparen && fnTo && rparen);
+	auto conop = ChoicesName("conop") || consym || (SequenceName("conIDop") && backTick && conID && backTick);
+	auto qop = ChoicesName("qop")|| varop || conop;
+	auto unit = (SequenceName("unit") && lparen && rparen);
+	auto elist = (SequenceName("[]") && lbracket && rbracket);
+	auto etuple = (SequenceName("etuple") && lparen && Repeat1(",",comma) && rparen);
+	auto efn = (SequenceName("efn") && lparen && fnTo && rparen);
 	auto qconsym = consym;
-	auto gconsym = make_shared<Choices>("gconsym") || colon || qconsym;
-	auto qcon = make_shared<Choices>("qcon") || conID || (make_shared<WSequenceN>("(gconsym)") && lparen && gconsym &&rparen);
-	auto gcon = make_shared<Choices>("gcon") || unit || elist || etuple || qcon;
+	auto gconsym = ChoicesName("gconsym") || colon || qconsym;
+	auto qcon = ChoicesName("qcon") || conID || (SequenceName("(gconsym)") && lparen && gconsym &&rparen);
+	auto gcon = ChoicesName("gcon") || unit || elist || etuple || qcon;
 	auto qvarid = varID;
 	auto qvarsym = varsym;
-	auto qvar = make_shared<Choices>("qvar") || qvarid || (make_shared<WSequenceN>("(qvarsym)") && lparen && qvarsym && rparen);
+	auto qvar = ChoicesName("qvar") || qvarid || (SequenceName("(qvarsym)") && lparen && qvarsym && rparen);
 	auto expRef = make_shared<ParserReference>();
 	auto infixexpRef = make_shared<ParserReference>();
 	auto expRefComma = RLoop("expRefComma",expRef,comma);
-	auto fbind = (make_shared<WSequenceN>("fbind") && qvar && equals && expRef);
+	auto fbind = (SequenceName("fbind") && qvar && equals && expRef);
 	auto fexpRef = make_shared<ParserReference>();
 	auto aexpRef = make_shared<ParserReference>();
 	auto declsRef = make_shared<ParserReference>();
 	auto patRef = make_shared<ParserReference>();// patRef;
-	auto wheres = (make_shared<WSequenceN>("where decls") && whereKw && declsRef);
-	auto guard = make_shared<Choices>("guard") 
-								|| (make_shared<WSequenceN>("pat->infixexp") && patRef && patFrom && infixexpRef)
-								|| (make_shared<WSequenceN>("let decls") && letKw && declsRef)
+	auto wheres = (SequenceName("where decls") && whereKw && declsRef);
+	auto lets = Action(LetClause, SequenceName("let decls") && letKw && declsRef);
+	//auto lets = make_shared<ParserReference>();
+	auto guard = ChoicesName("guard")
+								|| (SequenceName("pat->infixexp") && patRef && patFrom && infixexpRef)
+								|| lets//(SequenceName("let decls") && lets)
 								|| infixexpRef
 						        ;
-	auto guards = (make_shared<WSequenceN>("guards") && make_shared<tch<'|'>>() && Repeat1("guard+",guard));
-	auto gdpat = Repeat1("gdpatr",(make_shared<WSequenceN>("gdpat") && guards && fnTo && expRef));
-	auto alt = make_shared<Choices>("alt") || (make_shared<WSequenceN>("pat<-exp") && patRef && patFrom && expRef && Optional(wheres))
-										   || (make_shared<WSequenceN>("pat gdpat") && patRef && gdpat && Optional(wheres))
+	auto guards = (SequenceName("guards") && make_shared<tch<'|'>>() && Repeat1("guard+",guard));
+	auto gdpat = Repeat1("gdpatr",(SequenceName("gdpat") && guards && fnTo && expRef));
+	auto alt = ChoicesName("alt") || (SequenceName("pat<-exp") && patRef && patFrom && expRef && Optional(wheres))
+										   || (SequenceName("pat gdpat") && patRef && gdpat && Optional(wheres))
 											;
 	auto alts = RLoop2("altSemiAlt",alt,semicolon);
-	auto stmt = make_shared<Choices>("stmt") 
-							||(make_shared<WSequenceN>("stmt:exp") && expRef && semicolon)
-							||(make_shared<WSequenceN>("stmt:pat->exp") && patRef && fnTo && expRef && semicolon)
-							||(make_shared<WSequenceN>("stmt:let decls") && letKw && declsRef && semicolon)
+	auto stmt = ChoicesName("stmt")
+							||(SequenceName("stmt:exp") && expRef && semicolon)
+							||(SequenceName("stmt:pat->exp") && patRef && fnTo && expRef && semicolon)
+							||(SequenceName("stmt:let decls") && lets && semicolon)
 							||semicolon
 							;
-	auto stmts = (make_shared<WSequenceN>("stmts") && Repeat1("stmt+",SkipWhite(stmt)) && expRef && Optional(semicolon));
-	auto lexp = make_shared<Choices>("lexp")
-						||(make_shared<WSequenceN>("lambdaabs") && make_shared<tch<'\\'>>() && Repeat1("\\aexp+",SkipWhite(aexpRef)) && fnTo && expRef)
-						||(make_shared<Choices>("lexp-kw")
-							|| (make_shared<WSequenceN>("let") && letKw && declsRef && inKw && expRef)
-							||(make_shared<WSequenceN>("if") && ifKw && expRef && Optional(semicolon) && (make_shared<WSequenceN>("ifthen") && thenKw && expRef && Optional(semicolon)) && (make_shared<WSequenceN>("ifelse") && elseKw && expRef))
-							||(make_shared<WSequenceN>("case") && caseKw && expRef && ofKw && alts)
-							||(make_shared<WSequenceN>("do") && doKw && lbrace && stmts && rbrace))
+	auto stmts = (SequenceName("stmts") && Repeat1("stmt+",SkipWhite(stmt)) && expRef && Optional(semicolon));
+	auto lexp = ChoicesName("lexp")
+						||(SequenceName("lambdaabs") && make_shared<tch<'\\'>>() && Repeat1("\\aexp+",SkipWhite(aexpRef)) && fnTo && expRef)
+						||(ChoicesName("lexp-kw")
+							||(SequenceName("let") && lets && inKw && expRef)
+							||(SequenceName("if") && ifKw && expRef && Optional(semicolon) && (SequenceName("ifthen") && thenKw && expRef && Optional(semicolon)) && (SequenceName("ifelse") && elseKw && expRef))
+							||(SequenceName("case") && caseKw && expRef && ofKw && alts)
+							||(SequenceName("do") && doKw && lbrace && stmts && rbrace))
 						||fexpRef
 						;
-	auto infixexp = make_shared<Choices>("infixexp")
-						|| (make_shared<WSequenceN>("lexp,qop,infixexp") && lexp && qop && infixexpRef)
-						|| (make_shared<WSequenceN>("-infixexp") && minus && infixexpRef) 
+	auto infixexp = ChoicesName("infixexp")
+						|| (SequenceName("lexp,qop,infixexp") && lexp && qop && infixexpRef)
+						|| (SequenceName("-infixexp") && minus && infixexpRef)
 						|| lexp
 						;
 	auto typeRef = make_shared<ParserReference>();
@@ -386,35 +488,40 @@ void hs()
 	auto tycls = conID;
 	auto qtycls = tycls;
 	auto tyvar = varID;
-	auto klass = make_shared<Choices>("klass")
-						||(make_shared<WSequenceN>("klassNulTyVar") && qtycls && tyvar)
-						||(make_shared<WSequenceN>("klassMultiTyVar") && qtycls && lparen && tyvar && Repeat1("",atypeRef) && rparen)
+	auto klass = ChoicesName("klass")
+						||(SequenceName("klassNulTyVar") && qtycls && tyvar)
+						||(SequenceName("klassMultiTyVar") && qtycls && lparen && tyvar && Repeat1("",atypeRef) && rparen)
 						;
-	auto context = make_shared<Choices>("context")
+	auto context = ChoicesName("context")
 						|| klass
-						|| (make_shared<WSequenceN>("(klass ,klass*)") && lparen && RLoop("klassComma",klass,comma) && rparen)
+						|| (SequenceName("(klass ,klass*)") && lparen && RLoop("klassComma",klass,comma) && rparen)
 						;
-	auto exp = (make_shared<WSequenceN>("exp") && infixexpRef && Optional((make_shared<WSequenceN>("typesig") && colonColon && Optional((make_shared<WSequenceN>("context") && context && contextTo)) && typeRef))) ;
+	auto exp = SequenceName("exp")
+			&& infixexp
+			&& Optional(SequenceName("typesig")
+					&& colonColon
+					&& Optional(SequenceName("context") && context && contextTo)
+					&& typeRef) ;
 	infixexpRef->resolve(infixexp);
 	expRef->resolve(exp);
 
 
-	auto rhs = (make_shared<WSequenceN>("rhs") && equals && exp);
+	auto rhs = (SequenceName("rhs") && equals && exp);
 	auto tycon = conID;
 	auto qtycon = tycon;
-	auto gtycon = make_shared<Choices>("gtycon") || qtycon || unit || elist || efn || etuple;
-	auto var = make_shared<Choices>("var") 
+	auto gtycon = ChoicesName("gtycon") || qtycon || unit || elist || efn || etuple;
+	auto var = ChoicesName("var")
 						|| varID 
-						|| (make_shared<WSequenceN>("(varsym)") && lparen && varsym && rparen)
+						|| (SequenceName("(varsym)") && lparen && varsym && rparen)
 						;
-	auto con = make_shared<Choices>("con")
+	auto con = ChoicesName("con")
 						||conID
-						||(make_shared<WSequenceN>("(consym)") && lparen && consym && rparen)
+						||(SequenceName("(consym)") && lparen && consym && rparen)
 						;
-	auto tupleCon = (make_shared<WSequenceN>("tupleCon") && lparen && RLoop("type,",typeRef,comma) && rparen);
-	auto listCon = (make_shared<WSequenceN>("listCon") && lbracket && typeRef && rbracket);
-	auto parType = (make_shared<WSequenceN>("parType") && lparen && typeRef && rparen);
-	auto atype = make_shared<Choices>("atype")
+	auto tupleCon = (SequenceName("tupleCon") && lparen && RLoop("type,",typeRef,comma) && rparen);
+	auto listCon = (SequenceName("listCon") && lbracket && typeRef && rbracket);
+	auto parType = (SequenceName("parType") && lparen && typeRef && rparen);
+	auto atype = ChoicesName("atype")
 						|| gtycon
 						|| tyvar
 						|| tupleCon
@@ -427,67 +534,80 @@ void hs()
 	auto btype = Repeat1("btype",SkipWhite(atype)); // maybe?
 	//auto btype = atype;
 	btypeRef->resolve(btype);
-	auto type = btype; 
+	auto type = RLoop("type", btype, fnTo); // aka btype [-> type]
 	typeRef->resolve(type);
-	auto gendecl = (make_shared<WSequenceN>("gendecl") && Repeat1("varID",SkipWhite(varID)) && colonColon && type);
+	auto gendecl = (SequenceName("gendecl") && Repeat1("varID",SkipWhite(varID)) && colonColon && type);
 	auto apatRef = make_shared<ParserReference>();
-	auto fpat = (make_shared<WSequenceN>("fpat") && varID && equals && patRef);
+	auto fpat = (SequenceName("fpat") && varID && equals && patRef);
 	auto patternComma = RLoop("patternComma",patRef,comma);
-	auto patterns = make_shared<Choices>("patterns")
-						|| (make_shared<WSequenceN>("(pat)") && lparen && patRef && rparen)
-						|| (make_shared<WSequenceN>("(pat,pat)") && lparen && patternComma && rparen)
-						|| (make_shared<WSequenceN>("[pat,pat]") && lbracket && patternComma && lbracket)
-						|| (make_shared<WSequenceN>("~apat") && tilde && apatRef)
+	auto patterns = ChoicesName("patterns")
+						|| (SequenceName("(pat)") && lparen && patRef && rparen)
+						|| (SequenceName("(pat,pat)") && lparen && patternComma && rparen)
+						|| (SequenceName("[pat,pat]") && lbracket && patternComma && lbracket)
+						|| (SequenceName("~apat") && tilde && apatRef)
 						;
-	auto apat = make_shared<Choices>("apat") 
-						|| (make_shared<WSequenceN>("var@apat") && var && Optional((make_shared<WSequenceN>("@apat") && atSign && apatRef)))
+	auto apat = ChoicesName("apat")
+						|| (SequenceName("var@apat") && var && Optional((SequenceName("@apat") && atSign && apatRef)))
 						|| gcon
-						|| (make_shared<WSequenceN>("qcon{fpat,fpat}") && qcon && lbrace && Optional(RLoop("fpat,",fpat,comma)) && rbrace)
+						|| (SequenceName("qcon{fpat,fpat}") && qcon && lbrace && Optional(RLoop("fpat,",fpat,comma)) && rbrace)
 						|| wildcard
 						|| patterns
 						;
 	apatRef->resolve(apat);
 	auto funlhsRef = make_shared<ParserReference>();// funlhsRef;
-	auto funlhs = make_shared<Choices>("funlhs") 
-						|| (make_shared<WSequenceN>("var apat+") && varID && Repeat1("apat+",apat))
-						|| (make_shared<WSequenceN>("pat,varop,pat") && patRef && varop && patRef)
-						|| (make_shared<WSequenceN>("(funlhs)apat") && lparen && funlhsRef && rparen && Repeat1("apat+",apat))
+	auto funlhs = ChoicesName("funlhs")
+						|| (SequenceName("var apat+") && varID && Repeat1("apat+",SkipWhite(apat)))
+						|| (SequenceName("pat,varop,pat") && patRef && varop && patRef)
+						|| (SequenceName("(funlhs)apat") && lparen && funlhsRef && rparen && Repeat1("apat+",SkipWhite(apat)))
 						;
 	funlhsRef->resolve(funlhs);
-	auto qconop = make_shared<Choices>("qconop") 
+	auto qconop = ChoicesName("qconop")
 						|| gconsym 
-						|| (make_shared<WSequenceN>("`conID`") && backTick && conID && backTick)
+						|| (SequenceName("`conID`") && backTick && conID && backTick)
 						;
-	auto lpat = make_shared<Choices>("lpat") 
+	auto lpat = ChoicesName("lpat")
 						||apat
-						||(make_shared<WSequenceN>("gcon apat+") && gcon && Repeat1("apat+",apat))
+						||(SequenceName("gcon apat+") && gcon && Repeat1("apat+",SkipWhite(apat)))
 						;
-	auto pat = make_shared<Choices>("pat") 
-						||(make_shared<WSequenceN>("lpat,qconop,pat") && lpat && qconop && patRef)
+	auto pat = ChoicesName("pat")
+						||(SequenceName("lpat,qconop,pat") && lpat && qconop && patRef)
 						||lpat
 						;
 	patRef->resolve(pat);
-	auto decl = make_shared<Choices>("decl") 
+	auto decl = make_shared<ActionCaller>(Decl, ChoicesName("decl")
 						||gendecl
-						||(make_shared<WSequenceN>("funlhs|pat rhs") && (make_shared<Choices>("funlhs|pat") ||funlhs ||pat) && rhs)
-						;
+						||(SequenceName("funlhs|pat rhs") && (ChoicesName("funlhs|pat") ||funlhs ||pat) && rhs)
+						);
 	auto decls = RLoop("decls",decl,semicolon);
-	auto qual = make_shared<Choices>("qual")
+	auto qual = ChoicesName("qual")
 				|| pat && patFrom && expRef
-				|| letKw && decls
+				|| lets
 				|| expRef
 				;
+	auto isntminus = Isnt(minus);
+	auto isntqcon = Isnt(qcon);
 	auto aexp = varID  
 				|| gcon
 				|| hliteral
-				|| (make_shared<WSequenceN>("(exp)") && lparen && expRef && rparen)
-				|| (make_shared<WSequenceN>("(exp,exp)") && lparen && expRefComma && rparen)
-				|| (make_shared<WSequenceN>("[exp,exp]") && lbracket && expRefComma && rbracket)
-				||(make_shared<WSequenceN>("[exp,exp..exp]") && lbracket && expRef && Optional((make_shared<WSequenceN>(",exp") && comma && expRef)) && dotdot && expRef && rbracket)
-				||(make_shared<WSequenceN>("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop("qual,",qual,comma) && rbracket)
-				||(make_shared<WSequenceN>("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
-				||(make_shared<WSequenceN>("(qop<-> infixexp)") && lparen && qop && infixexpRef && rparen)
-				||(make_shared<WSequenceN>("qcon{fbind+}") && qcon && lbrace && Repeat1("fbind+",fbind) && rbrace)
+				|| (SequenceName("(exp)") && lparen && expRef && rparen)
+				|| (SequenceName("(exp,exp)") && lparen && expRefComma && rparen)
+				|| (SequenceName("[exp,exp]") && lbracket && expRefComma && rbracket)
+				||(SequenceName("[exp,exp..exp]") && lbracket && expRef && Optional((SequenceName(",exp") && comma && expRef)) && dotdot && expRef && rbracket)
+				||(SequenceName("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop("qual,",qual,comma) && rbracket)
+				||(SequenceName("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
+				||(SequenceName("(qop<-> infixexp)") && lparen &&isntminus && qop && infixexpRef && rparen)
+				||(SequenceName("qcon{fbind+}") && qcon && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
+				//||((SequenceName("aexp<qcon>{fbind+}") && isntqcon) && aexp && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
+				//||((SequenceName("aexp<qcon>{fbind+}") && ChoicesName("isntqcon")) && aexp && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
+				//||(SequenceName("aexp<qcon>{fbind+}") && isntqcon && aexpRef && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
+				// So far the recursion here has bit us bad:
+				// First we got compile time problems because we didn't notice the aexp-self-reference.
+				// Then when it was worked around with aexpRef, it was effectively full-on left-recursion
+				// and in fact that's our situation now. It needs to be refactored
+				// probably something like
+				// auto aexp = (my entire current expression except last choice) && Optional(lbrace && fbind+ && rbrace)
+				//  with a little isntqcon action thrown in.
+				//  but for now I want to debug let forms.
 				;
 	aexp->name = "aexp";
 	aexpRef->resolve(aexp);
@@ -497,28 +617,28 @@ void hs()
 	auto exclam = make_shared<tch<'!'>>();
 	auto vars = RLoop("vars",var,comma);
 	auto fielddecl = vars && colonColon && (type || (exclam && atype));
-	auto constr = make_shared<Choices>("constrs")
-						|| make_shared<WSequenceN>("con atype") && con && Repeat0(Optional(exclam) && atype)
-						|| make_shared<WSequenceN>("type conop type") && (btype || (exclam && atype)) && conop && (btype || (exclam && atype))
-						|| make_shared<WSequenceN>("con {fields}") && con && lbrace && RLoop("fielddecl,",fielddecl, comma) && rbrace
+	auto constr = ChoicesName("constrs")
+						|| SequenceName("con atype") && con && Repeat0(SkipWhite(Optional(exclam)) && SkipWhite(atype))
+						|| SequenceName("type conop type") && (btype || (exclam && atype)) && conop && (btype || (exclam && atype))
+						|| SequenceName("con {fields}") && con && lbrace && RLoop("fielddecl,",fielddecl, comma) && rbrace
 						;
 	auto constrs = RLoop("constrs",constr,vertbar);
-	auto simpletype = make_shared<WSequenceN>("simpletype") && tycon && Repeat1("tyvars", tyvar);
-	auto newconstr = make_shared<Choices>("newconstr") 
+	auto simpletype = SequenceName("simpletype") && tycon && Repeat1("tyvars", SkipWhite(tyvar));
+	auto newconstr = ChoicesName("newconstr")
 						|| con && atype
 						|| con && lbrace && var && colonColon && type && rbrace
 						;
-	auto simpleclass = make_shared<WSequenceN>("simpleclass") && qtycls && tyvar ;
-	auto scontext = make_shared<Choices>("scontext")
+	auto simpleclass = SequenceName("simpleclass") && qtycls && tyvar ;
+	auto scontext = ChoicesName("scontext")
 						|| simpleclass
 						|| lparen && RLoop("simpleclass,", simpleclass, comma) && rparen
 						;
-	auto cdecl_  = make_shared<Choices>("cdecl")
+	auto cdecl_  = ChoicesName("cdecl")
 						|| gendecl
-						|| lparen && (funlhs || var ) && rhs
+						|| (funlhs || var ) && rhs
 						;
-	auto cdecls = make_shared<WSequenceN>("cdecls") && lparen && RLoop("cdecl,",cdecl_,comma) && rparen ;
-	auto inst = make_shared<Choices>("inst")
+	auto cdecls = SequenceName("cdecls") && lparen && RLoop("cdecl,",cdecl_,comma) && rparen ;
+	auto inst = ChoicesName("inst")
 						|| gtycon
 						|| lparen && gtycon && Repeat0(tyvar) && rparen
 						|| lparen && RLoop("tyvar,",tyvar,comma) && rparen
@@ -526,7 +646,7 @@ void hs()
 						|| lparen && tyvar && fnTo && tyvar && rparen
 						;
 	auto idecl = Optional((funlhs || var) && rhs);
-	auto idecls = make_shared<WSequenceN>("idecls") && lbrace && RLoop("idecl,",idecl, comma) && rbrace ;
+	auto idecls = SequenceName("idecls") && lbrace && RLoop("idecl,",idecl, comma) && rbrace ;
 	auto optString = Optional(make_shared<Quoted<'"'>>());
 	auto impent = optString;
 	auto expent = optString;
@@ -542,48 +662,50 @@ void hs()
 				;
 	ftypeRef->resolve(ftype);
   
-	auto fdecl = make_shared<Choices>("fdecl")
+	auto fdecl = ChoicesName("fdecl")
 						|| importKw && callconv && Optional(safety) && impent && var && colonColon && ftype
 						|| exportKw && callconv && expent && var && colonColon && ftype
 						;
-	auto topdecl = make_shared<Choices>("topdecl")
-						|| make_shared<WSequenceN>("type") && typeKw && simpletype && equals && type
-						|| make_shared<WSequenceN>("data") && dataKw && Optional(context && contextTo) && simpletype && Optional(equals && constrs) && Optional(derivingKw)
-						|| make_shared<WSequenceN>("newtype") && newtypeKw && Optional(context && contextTo) && simpletype && equals && newconstr && Optional(derivingKw)
-						|| make_shared<WSequenceN>("class") && classKw && Optional(scontext && contextTo) && tycls && tyvar && Optional(whereKw && cdecls)
-						|| make_shared<WSequenceN>("instance") && instanceKw && Optional(scontext && contextTo) && qtycls && inst && Optional(whereKw && idecls)
-						|| make_shared<WSequenceN>("default") && defaultKw && lparen && RLoop("type,",type,comma) && rparen
-						|| make_shared<WSequenceN>("foreign") && foreignKw && fdecl
+	auto topdecl = ChoicesName("topdecl")
+						|| SequenceName("type") && typeKw && simpletype && equals && type
+						|| SequenceName("data") && dataKw && Optional(context && contextTo) && simpletype && Optional(equals && constrs) && Optional(derivingKw)
+						|| SequenceName("newtype") && newtypeKw && Optional(context && contextTo) && simpletype && equals && newconstr && Optional(derivingKw)
+						|| SequenceName("class") && classKw && Optional(scontext && contextTo) && tycls && tyvar && Optional(whereKw && cdecls)
+						|| SequenceName("instance") && instanceKw && Optional(scontext && contextTo) && qtycls && inst && Optional(whereKw && idecls)
+						|| SequenceName("default") && defaultKw && lparen && RLoop("type,",type,comma) && rparen
+						|| SequenceName("foreign") && foreignKw && fdecl
 						|| decl
 						;
 	auto topdecls = RLoop("topdecls",topdecl,semicolon);
 	declsRef->resolve(decls);
-	auto cname = make_shared<Choices>("cname") ||var ||con;
-	auto import = make_shared<Choices>("import") 
+	auto cname = ChoicesName("cname") ||var ||con;
+	auto import = ChoicesName("import")
 						|| var
-						|| (make_shared<WSequenceN>("tyconwcnames") && tycon && Optional(make_shared<Choices>("dotsorcnames") || (make_shared<WSequenceN>("(..)") && lparen && dotdot && rparen)
-								|| (make_shared<WSequenceN>("(cnames)") && lparen && RLoop("cnames",cname,comma) && rparen)))
-						|| (make_shared<WSequenceN>("tyclswvars") && tycls && Optional(make_shared<Choices>("dotsorvars") || (make_shared<WSequenceN>("(..)") && lparen && dotdot && rparen)
-								|| (make_shared<WSequenceN>("(vars)") && lparen && RLoop("vars",var,comma) && rparen)))
+						|| (SequenceName("tyconwcnames") && tycon && Optional(ChoicesName("dotsorcnames") || (SequenceName("(..)") && lparen && dotdot && rparen)
+								|| (SequenceName("(cnames)") && lparen && RLoop("cnames",cname,comma) && rparen)))
+						|| (SequenceName("tyclswvars") && tycls && Optional(ChoicesName("dotsorvars") || (SequenceName("(..)") && lparen && dotdot && rparen)
+								|| (SequenceName("(vars)") && lparen && RLoop("vars",var,comma) && rparen)))
 						;
-	auto impspec = (make_shared<WSequenceN>("impspec") && Optional(hidingKw) && lparen && RLoop("importComma",import,comma) && rparen);
-	auto impdecl = (make_shared<WSequenceN>("impdecl") && importKw && Optional(qualifiedKw)&& moduleID && Optional((make_shared<WSequenceN>("as modopt") && asKw && moduleID)) && Optional(impspec));
+	auto impspec = (SequenceName("impspec") && Optional(hidingKw) && lparen && RLoop("importComma",import,comma) && rparen);
+	auto impdecl = (SequenceName("impdecl") && importKw && Optional(qualifiedKw)&& moduleID && Optional((SequenceName("as modopt") && asKw && moduleID)) && Optional(impspec));
 	auto imports = RLoop2("imports", impdecl, semicolon);
-	auto body = make_shared<Choices>("body") 
-						|| (make_shared<WSequenceN>("bodyOfDeclsWithImports") && lbrace && imports && /*semicolon && */ decls && rbrace)
-		                || (make_shared<WSequenceN>("bodyOfImports") && lbrace && imports && rbrace)
-						|| (make_shared<WSequenceN>("bodyOfTopDecls") && lbrace && topdecls && rbrace)
+	auto body = ChoicesName("body")
+						|| (SequenceName("bodyOfDeclsWithImports") && lbrace && imports && /*semicolon && */ decls && rbrace)
+		                || (SequenceName("bodyOfImports") && lbrace && imports && rbrace)
+						|| (SequenceName("bodyOfTopDecls") && lbrace && topdecls && rbrace)
 						;
-	auto module = (make_shared<WSequenceN>("module") && moduleKw && moduleID && exports && whereKw && body);
-	string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r }");
+	auto module = (SequenceName("module") && moduleKw && moduleID && exports && whereKw && body);
+	string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference :: a->a; circumference r=2*pi*r; party = let a=5 in a }");
+	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r; party = let a=5 in a }");
+	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r }");
 	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4= \\a->a+1; circumference r=2*pi*r }");
 	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; circumference r=2*pi*r }");
 	ParseStatePtr st = make_shared<ParseState>(input);
 	ParseResultPtr r = (*module)(st);
 	if (r)
 	{
-		cout << "r [" << *r->remaining << ']' << endl;
-		cout << "AST " << *r->ast;
+		cout << "r [" << *r->getState() << ']' << endl;
+		cout << "AST " << *r->getAST();
 		cout << endl;
 	}
 	else

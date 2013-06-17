@@ -28,8 +28,8 @@ int main()
 	ParseResultPtr r = (*palphanum)(st);
 	if (r)
 	{
-		cout << "r [" << *r->remaining << ']' << endl;
-		cout << "AST " << *r->ast;
+		cout << "r [" << *r->getState() << ']' << endl;
+		cout << "AST " << *r->getAST();
 		cout << endl;
 	}
 	else

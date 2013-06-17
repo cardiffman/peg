@@ -30,8 +30,8 @@ int main()
 	ParseResultPtr r = (*arithmetic())(st1b);
 	if (r)
 	{
-		cout << "r [" << *r->remaining << ']' << endl;
-		cout << "AST " << *r->ast;
+		cout << "r [" << *r->getState() << ']' << endl;
+		cout << "AST " << *r->getAST();
 		cout << endl;
 	}
 	else
@@ -45,8 +45,8 @@ int main()
 
 	if (r)
 	{
-		cout << "r [" << *r->remaining << ']' << endl;
-		cout << "AST " << *r->ast;
+		cout << "r [" << *r->getState() << ']' << endl;
+		cout << "AST " << *r->getAST();
 		cout << endl;
 	}
 	else

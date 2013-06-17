@@ -2,6 +2,7 @@
 #include "peg.h"
 #include "ParseState.h"
 #include "Ast.h"
+#include "Action.h"
 
 #include <iostream>
 #include <cstdlib>
@@ -49,7 +50,7 @@ struct token : public ParserBase
 		{
 			if (start->substr(0, match.length()) == match)
 
-				return make_shared<ParseResult>(start->from(match.length()), new IdentifierAST(match));
+				return make_shared<ParseResult>(start->from(match.length()), std::make_shared<IdentifierAST>(match));
 		}
 		return ParseResultPtr();
 	}
@@ -65,7 +66,7 @@ struct range : public ParserBase
   {
 	int ch = start->at(0);
 	if (ch >= rangeBegin && ch <= rangeEnd)
-		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
+		return make_shared<ParseResult>(start->from(1), std::make_shared<StringAST>(string(1, ch)));
 	return ParseResultPtr();
   }
   int rangeBegin;
@@ -80,7 +81,7 @@ struct ch : public ParserBase
   {
 	int ch = start->at(0);
 	if (ch == c)
-		return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
+		return make_shared<ParseResult>(start->from(1), std::make_shared<StringAST>(string(1, ch)));
 	return ParseResultPtr();
   }
   int c;
@@ -96,7 +97,7 @@ struct notch : public ParserBase
 		if (ch == 0)
 			return ParseResultPtr();
 		if (ch != c)
-			return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
+			return make_shared<ParseResult>(start->from(1), std::make_shared<StringAST>(string(1, ch)));
 		return ParseResultPtr();
 	}
 	int c;
@@ -112,30 +113,132 @@ template <int c> struct tnotch : public ParserBase
 		if (ch == 0)
 			return ParseResultPtr();
 		if (ch != c)
-			return make_shared<ParseResult>(start->from(1), new StringAST(string(1, ch)));
+			return make_shared<ParseResult>(start->from(1), std::make_shared<StringAST>(string(1, ch)));
 		return ParseResultPtr();
 	}
 };
 
+ParseResultPtr WSequenceN::parse(const ParseStatePtr& start)
+{
+	ParseStatePtr t1 = start;
+	ParseResultPtr r;
+	shared_ptr<SequenceAST> ast;
+	extern bool showFails;
+	Parsers::const_iterator i = elements.begin();
+	static int sequence_id = 0;
+	int sequence = ++sequence_id;
+	while (i != elements.end())
+	{
+		ParserPtr parser = *i;
+		r = skipwhite(t1,parser);
+		if (!r)
+		{
+			//ast.reset();
+			//if (showFails) std::cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
+			return r;
+		}
+		if (!ast)
+			ast = make_shared<SequenceAST>();
+		ParserBase* pb = parser.get();
+		int pbid = pb->parser_id;
+		/* darn: optional is a template
+		ParserBase* pb = parser.get();
+		optional* opt = dynamic_cast<optional*>(pb);
+		if (opt)
+			std::cout << name << ' ' << sequence << " about to append result of 'optional'" << ' ' << __LINE__ << std::endl;
+			*/
+		//std::cout << name << ' ' << sequence << " appending AST: " << r->getAST()->to_string() << " because " << pbid << ' ' << __LINE__ << std::endl;
+		ast->append(r->getAST());
+		//std::cout << name << ' ' << sequence << " AST: " << ast->to_string() << ' ' << __LINE__ << std::endl;
+		//std::cout << name <<' ' << sequence << ' ' << r->getState()->substr(0) << ' ' << __LINE__ << std::endl;
+		t1 = r->getState();
+		++i;
+	}
+	r = r->getNewResult(ast);
+	//std::cout << name << ' ' << sequence << " AST: " << r->getAST()->to_string() << ' ' << __LINE__ << std::endl;
+	//std::cout << name <<' ' << sequence << ' ' << r->getState()->substr(0) << std::endl;
+	return r;
+}
+
+ParseResultPtr Choices::parse(const ParseStatePtr& start)
+{
+	extern bool showFails;
+	ParseStatePtr t1 = start;
+	ParseResultPtr r;
+	Parsers::const_iterator i = choices.begin();
+	while ((!r) && i != choices.end())
+	{
+		ParserPtr parser = *i;
+		r = (*parser)(t1);
+		++i;
+	}
+	if (!r)
+	{
+		if (showFails) std::cout << name << " fail " << t1->substr(0) << ' ' << __LINE__ << std::endl;
+		return r;
+	}
+	std::cout << name <<' '<< r->getState()->substr(0) << std::endl;
+	return r;
+}
+
+ParseResultPtr repeat1::parse(const ParseStatePtr& start)
+{
+	extern bool showFails;
+	std::shared_ptr<SequenceAST> ast;
+	std::shared_ptr<AST> firstAST;
+	ParseResultPtr rep = (*next)(start);
+	if (!rep)
+	{
+		if (showFails) std::cout << name<< " failed [" << start->substr(0) << "] " << __LINE__ << std::endl;
+		return rep;
+	}
+	//ast->append(rep->getAST());
+	firstAST = rep->getAST();
+	ParseResultPtr rep2 = (*next)(rep->getState());
+	while (rep2)
+	{
+		if (!ast)
+		{
+			ast = std::make_shared<SequenceAST>();
+			ast->append(firstAST);
+		}
+		ast->append(rep2->getAST());
+		rep = rep2;
+		rep2 = (*next)(rep2->getState());
+	}
+	std::cout << name<< ' ' << rep->getState()->substr(0) << std::endl;
+	if (!ast)
+		return rep->getNewResult(firstAST);
+	return rep->getNewResult(ast);
+}
+
+ParseResultPtr repeat0::parse(const ParseStatePtr& start)
+{
+	shared_ptr<SequenceAST> ast = make_shared<SequenceAST>();
+	shared_ptr<AST> firstAST;
+	ParseResultPtr rep = (*next)(start);
+	if (!rep)
+	{
+		return std::make_shared<ParseResult>(start, ast);
+	}
+	firstAST = rep->getAST();
+	ParseResultPtr rep2 = (*next)(rep->getState());
+	while (rep2)
+	{
+		if (!ast->size())
+			ast->append(firstAST);
+		ast->append(rep2->getAST());
+		rep = rep2;
+		rep2 = (*next)(rep2->getState());
+	}
+	std::cout <<  __FUNCTION__<< ' ' << rep->getState()->substr(0) << std::endl;
+	if (ast->size())
+		return std::make_shared<ParseResult>(rep->getState(), ast);
+	return std::make_shared<ParseResult>(rep->getState(), firstAST);
+}
+
 bool showFails = false;
 
-
-
-// When you want a parse's failure to be a good thing.
-// This parser does not "consume" input.
-template <typename Parser> struct isnt : public ParserBase
-{
-  isnt(Parser& next) : next(next) {}
-  ParseResultPtr parse(const ParseStatePtr& start)
-  {
-	string ast;
-	ParseResultPtr rep = next(start);
-	if (!rep)
-		return start; // don't advance, but do succeed
-	return ParseResultPtr();
-  }
-  Parser& next;
-};
 
 
 void foo()
@@ -153,7 +256,25 @@ void foo()
   pr = (*tokens2)(ParseStatePtr()); // Not valid input.
 }
 
+class TestEquationAST : public AST
+{
+public:
+	TestEquationAST(const ASTPtr& lhs, const ASTPtr& rhs)
+	: lhs(lhs), rhs(rhs) {}
+	std::string to_string() const
+	{
+		return "Equation: " + lhs->to_string() + " = " + rhs->to_string();
+	}
+private:
+	ASTPtr lhs;
+	ASTPtr rhs;
+};
 
+ASTPtr TestEquation(const ASTPtr& ast)
+{
+	SequenceAST* sequence = dynamic_cast<SequenceAST*>(ast.get());
+	return make_shared<TestEquationAST>(sequence->at(0), sequence->at(2));
+}
 
 	auto idparse = make_shared<ID>();
 	auto numparse = make_shared<NUM>();
@@ -180,7 +301,7 @@ void foo()
 	auto multiplication = RLoop("multiplication",factor,times);
 	auto addition = RLoop("addition",multiplication,plus);
 	auto lhs = Repeat1("lhs",SkipWhite(idparse));
-	auto equation = (make_shared<WSequenceN>("equation") && lhs && equals && addition);
+	auto equation = make_shared<ActionCaller>(TestEquation, make_shared<WSequenceN>("equation") && lhs && equals && addition);
 
 			
 void tests()
@@ -221,8 +342,8 @@ lhs : id*
 	//ParseResult* e0 = docparse(&doc1);
 	if (e0)
 	{
-		cout << "*e0 [" << *e0->remaining << ']' << endl;
-		cout << "AST " << *e0->ast;
+		cout << "*e0 [" << *e0->getState() << ']' << endl;
+		cout << "AST " << *e0->getAST();
 		cout << endl;
 	}
 	else

@@ -4,6 +4,7 @@
 #include <string>
 #include <iosfwd>
 #include <vector>
+#include <memory>
 
 class AST
 {
@@ -13,6 +14,7 @@ public:
 	virtual std::string to_string() const = 0;
 	friend std::ostream& operator<<(std::ostream& os, const AST& ast);
 };
+typedef std::shared_ptr<AST> ASTPtr;
 class IntegerAST : public AST
 {
 public:
@@ -41,9 +43,11 @@ class SequenceAST : public AST
 {
 public:
 	SequenceAST() {}
-	void append(AST* ast) { members.push_back(ast); }
+	void append(ASTPtr ast);
+	ASTPtr at(size_t m) { return members[m]; }
+	size_t size() const { return members.size(); }
 	std::string to_string() const ;
 private:
-	std::vector<AST*> members;
+	std::vector<ASTPtr> members;
 };
 #endif // INCLUDED_AST_H
