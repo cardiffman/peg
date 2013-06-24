@@ -15,15 +15,16 @@
 // a compile-time string constant.
 template <const char match[]> struct ttoken : public ParserBase
 {
-	ttoken() {}
+	ttoken() : ParserBase(match) {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
+		extern bool showRemainder;
 		size_t ml = strlen(match);
 		if (start->length() >= ml)
 		{
 			if (start->substr(0, ml) == match)
 			{
-				std::cout << "ttoken "<< match << " matched " << start->substr(0) << std::endl;
+				if (showRemainder) std::cout << "ttoken "<< match << " matched " << start->substr(0) << std::endl;
 				return std::make_shared<ParseResult>(start->from(ml), std::make_shared<StringAST>(match));
 			}
 		}
@@ -35,7 +36,7 @@ template <const char match[]> struct ttoken : public ParserBase
 // testing for a character code established at compile time.
 template <int c> struct tch : public ParserBase
 {
-	tch() {}
+	tch() : ParserBase(std::string(1,c)) {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
 		int ch = start->at(0);
@@ -72,7 +73,7 @@ template <typename Parser> ParseResultPtr skipwhite(const ParseStatePtr& start, 
 
 template <typename Parser> struct Skipwhite : public ParserBase
 {
-  Skipwhite(const std::shared_ptr<Parser>& next) : next(next) {}
+  Skipwhite(const std::shared_ptr<Parser>& next) : ParserBase("SkipWhite+"+next->name), next(next) {}
   std::shared_ptr<Parser> next;
   ParseResultPtr parse(const ParseStatePtr& start)
   {
@@ -91,7 +92,7 @@ template <typename Parser> std::shared_ptr<Skipwhite<Parser>> SkipWhite(const st
 // This NUM is just the typical integer for now.
 struct NUM : public ParserBase
 {
-  NUM() {}
+  NUM() :ParserBase("NUM") {}
   ParseResultPtr parse(const ParseStatePtr& start)
   {
 	size_t ic = 0;
@@ -111,8 +112,7 @@ struct NUM : public ParserBase
 // this parser handles it.
 struct repeat1 : public ParserBase
 {
-	repeat1(const std::string& name, const std::shared_ptr<ParserBase>& next) : name(name), next(next) {}
-	std::string name;
+	repeat1(const std::string& name, const std::shared_ptr<ParserBase>& next) : ParserBase(name), next(next) {}
 	ParseResultPtr parse(const ParseStatePtr& start);
 	std::shared_ptr<ParserBase> next;
 };
@@ -123,7 +123,7 @@ inline std::shared_ptr<ParserBase> Repeat1(const std::string& name, const std::s
 
 struct repeat0 : public ParserBase
 {
-  repeat0(const std::shared_ptr<ParserBase>& next) : next(next) {}
+  repeat0(const std::shared_ptr<ParserBase>& next) : ParserBase("repeat0+"+next->name), next(next) {}
   std::shared_ptr<ParserBase> next;
   ParseResultPtr parse(const ParseStatePtr& start);
 };
@@ -141,7 +141,11 @@ struct ParserReference : public ParserBase
 {
 	ParserReference(const std::shared_ptr<ParserBase>& res): resolution(res) {}
 	ParserReference() : resolution() {}
-	void resolve(const std::shared_ptr<ParserBase>& res) { resolution = res; }
+	void resolve(const std::shared_ptr<ParserBase>& res)
+	{
+		name = res->name;
+		resolution = res;
+	}
 	ParseResultPtr parse(const ParseStatePtr& start) {
 		if (resolution)
 			return resolution->parse(start);
@@ -154,7 +158,7 @@ struct ParserReference : public ParserBase
 
 template <typename Parser> struct optional : public ParserBase
 {
-	optional(const std::shared_ptr<Parser>& next) : next(next) {}
+	optional(const std::shared_ptr<Parser>& next) : ParserBase("Optional(+"+next->name+")"), next(next) {}
 	std::shared_ptr<Parser> next;
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
@@ -176,8 +180,7 @@ template <typename Parser> std::shared_ptr<optional<Parser>> Optional(const std:
 struct Choices : public ParserBase
 {
 	//typedef shared_ptr<ParserBase> ParserPtr;
-	Choices(const std::string& name): name(name) {}
-	std::string name;
+	Choices(const std::string& name): ParserBase(name) {}
 	typedef std::vector<ParserPtr> Parsers;
 	Parsers choices;
 	ParseResultPtr parse(const ParseStatePtr& start);
@@ -217,8 +220,7 @@ template <typename Parser1> std::shared_ptr<Choices> operator||(const string& na
 class WSequenceN : public ParserBase
 {
 public:
-	WSequenceN(const std::string& name): name(name) {}
-	std::string name;
+	WSequenceN(const std::string& name): ParserBase(name) {}
 	typedef std::vector<ParserPtr> Parsers;
 	Parsers elements;
 	ParseResultPtr parse(const ParseStatePtr& start);
@@ -244,12 +246,11 @@ std::shared_ptr<WSequenceN> operator&&(const std::shared_ptr<WSequenceN> s, cons
 template <typename Item, typename Join, bool endsWithJoin>
 struct rLoop : public ParserBase 
 {
-	rLoop(const std::string& name, const std::shared_ptr<Item>& item, const std::shared_ptr<Join>& join) : name(name), item(item), join(join) {}
-	std::string name;
+	rLoop(const std::string& name, const std::shared_ptr<Item>& item, const std::shared_ptr<Join>& join) : ParserBase(name), item(item), join(join) {}
 	std::shared_ptr<Item> item;
 	std::shared_ptr<Join> join;
 	ParseResultPtr parse(const ParseStatePtr& start) {
-		extern bool showFails;
+		extern bool showFails, showRemainder;
 		ParseStatePtr t1 = start;
 		ParseResultPtr r = skipwhite(t1, item);
 		if (!r)
@@ -275,12 +276,12 @@ struct rLoop : public ParserBase
 					r = r->getNewResult(firstAST);
 				else
 					r = r->getNewResult(ast);
-				std::cout << name << ' ' << r->getState()->substr(0) << std::endl;
+				if (showRemainder) std::cout << name << ' ' << '[' << r->getState()->substr(0) <<"] " << __LINE__ << std::endl;
 				return r;
 			}
 			if (!joinResult && endsWithJoin)
 			{
-				if (showFails) std::cout << name << ' ' << '[' << t1->substr(0) << "] fail at " << __LINE__ << std::endl;
+				if (showFails) std::cout << name << " failed  [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
 				return r; // This means something like "a, a, a " happened which is not okay.
 			}
 			r = joinResult;
@@ -294,7 +295,7 @@ struct rLoop : public ParserBase
 			r = skipwhite(t1, item);
 			if (!r && !endsWithJoin)
 			{
-				if (showFails) std::cout << name << ' ' << '[' << t1->substr(0) << "] fail at " << __LINE__ << std::endl;
+				if (showFails) std::cout << name << " failed  [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
 				return r; // This means something like "a, a, a, " happened which is not okay.
 			}
 			if (!r && endsWithJoin)
@@ -302,7 +303,7 @@ struct rLoop : public ParserBase
 				// Item parse failed, so last success was join.
 				// This means something like "a, a, a, " happened which is okay.
 				// The ast is complete and already stored in joinResult which is what we return.
-				std::cout << name << ' ' << '[' << joinResult->getState()->substr(0) << "] " << __LINE__ << std::endl;
+				if (showRemainder) std::cout << name << ' ' << '[' << joinResult->getState()->substr(0) << "] " << __LINE__ << std::endl;
 				return std::make_shared<ParseResult>(joinResult->getState(), ast);
 			}
 		}

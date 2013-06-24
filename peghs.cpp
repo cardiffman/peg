@@ -8,6 +8,10 @@
 #include <cctype>
 #include <string>
 #include <iostream>
+#include <fstream>
+#include <vector>
+#include <list>
+#include <stack>
 
 using std::string;
 using std::make_shared;
@@ -17,6 +21,7 @@ using std::endl;
 
 struct ConID : public ParserBase
 {
+	ConID() : ParserBase("ConID") {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
 		size_t ic = 0;
@@ -41,6 +46,7 @@ bool reservedid(const string& sym)
 }
 struct VarID : public ParserBase
 {
+	VarID() : ParserBase("VarID") {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
 		size_t ic = 0;
@@ -88,7 +94,9 @@ bool reservedOp(const string& sym)
 bool asciiSymbolChar(int ch)
 {
 	switch (ch) {
-	case '!': case '#': case '$': case '%': case '&': case '*': case '+': case '.': case '/': case '<': case '=': case '>': case '?': case '@': case '\\': case '^': case '|': case '-': case '~': case ':':
+	case '!': case '#': case '$': case '%': case '&': case '*': case '+':
+		case '.': case '/': case '<': case '=': case '>': case '?': case '@':
+			case '\\': case '^': case '|': case '-': case '~': case ':':
 		return true;
 	}
 	return false;
@@ -96,7 +104,9 @@ bool asciiSymbolChar(int ch)
 bool asciiSymbolCharExceptColon(int ch)
 {
 	switch (ch) {
-	case '!': case '#': case '$': case '%': case '&': case '*': case '+': case '.': case '/': case '<': case '=': case '>': case '?': case '@': case '\\': case '^': case '|': case '-': case '~':
+	case '!': case '#': case '$': case '%': case '&': case '*': case '+':
+		case '.': case '/': case '<': case '=': case '>': case '?': case '@':
+			case '\\': case '^': case '|': case '-': case '~':
 		return true;
 	}
 	return false;
@@ -109,7 +119,7 @@ struct ReservedOp : public ParserBase
 		if (start->length() > 0 && asciiSymbolChar(start->at(0)))
 		{
 			++ic;
-			while (start->length() > ic && (asciiSymbolChar(start->at(0))))
+			while (start->length() > ic && (asciiSymbolChar(start->at(ic))))
 				++ic;
 			if (!reservedOp(start->substr(0,ic)))
 				return ParseResultPtr();
@@ -120,6 +130,7 @@ struct ReservedOp : public ParserBase
 };
 struct VarSym : public ParserBase
 {
+	VarSym() : ParserBase("VarSym") {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
 		size_t ic = 0;
@@ -142,16 +153,18 @@ struct VarSym : public ParserBase
 };
 struct ConSym : public ParserBase
 {
+	ConSym() : ParserBase("ConSym") {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
 		size_t ic = 0;
 		if (start->length() > 0 && start->at(0)==':')
 		{
 			++ic;
-			while (start->length() > ic && (asciiSymbolChar(start->at(0))))
+			while (start->length() > ic && (asciiSymbolChar(start->at(ic))))
 				++ic;
 			if (reservedOp(start->substr(0,ic)))
 				return ParseResultPtr();
+			cout <<"ConSym [" << start->substr(0,ic) << ']' << endl;
 			return make_shared<ParseResult>(start->from(ic), std::make_shared<IdentifierAST>(start->substr(0, ic)));
 		}
 		return ParseResultPtr();
@@ -162,7 +175,7 @@ struct ConSym : public ParserBase
 // character but an entity &apos; or &quote; can be used.
 template <int quote> struct Quoted : public ParserBase
 {
-	Quoted() {}
+	Quoted() : ParserBase("Quoted-"+string(1,quote)) {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
 		size_t ic =0;
@@ -173,11 +186,13 @@ template <int quote> struct Quoted : public ParserBase
 		++ic;
 		while (ic < start->length()-1 && start->at(ic) != quote)
 		{
+			if (start->at(ic)=='\\')
+				++ic;
 			++ic;
 		}
 		if (start->at(ic) != quote)
 			return ParseResultPtr();
-		return make_shared<ParseResult>(start->from(ic), std::make_shared<StringAST>(start->substr(0, ic)));
+		return make_shared<ParseResult>(start->from(ic+1), std::make_shared<StringAST>(start->substr(0, ic+1)));
 	}
 };
 
@@ -244,44 +259,39 @@ shared_ptr<ParserBase> Isnt(const shared_ptr<ParserBase>& parser)
 #endif
 
 
-// module ::= 'module' name '(' exports ')' 'where' body
-// body ::= '{' impdecls ';' topdecls '}'
-// body ::= '{' impdecls '}'
-// body ::= '{' topdecls '}'
-// topdecls ::= topdecl (';' topdecl)*
-// topdecl ::= topdecl-kw | decl
-// decls ::= '{' decl (';' decl)* '}'
-// decl ::= gendecl | (funlhs|pat) rhs
-extern char module_kw[] = "module";
-extern char where_kw[] = "where";
-extern char qualified_kw[] = "qualified";
-extern char import_kw[] = "import";
-extern char as_kw[] = "as";
-extern char hiding_kw[] = "hiding";
-extern char let_kw[] = "let";
-extern char in_kw[] = "in";
-extern char if_kw[] = "if";
-extern char then_kw[] = "then";
-extern char else_kw[] = "else";
-extern char case_kw[] = "case";
-extern char of_kw[] = "of";
-extern char do_kw[] = "do";
-extern char type_kw[] = "type";
-extern char data_kw[] = "data";
-extern char newtype_kw[] = "newtype";
-extern char class_kw[] = "class";
-extern char instance_kw[] = "instance";
-extern char default_kw[] = "default";
-extern char foreign_kw[] = "foreign";
-extern char deriving_kw[] = "deriving";
-extern char safe_kw[] = "safe";
-extern char unsafe_kw[] = "unsafe";
-extern char ccall_kw[] = "ccall";
-extern char stdcall_kw[] = "stdcall";
-extern char cplusplus_kw[] = "cplusplus";
-extern char jvm_kw[] = "jvm";
-extern char dotnet_kw[] = "dotnet_kw";
-extern char export_kw[] = "export";
+extern const char module_kw[] = "module";
+extern const char where_kw[] = "where";
+extern const char qualified_kw[] = "qualified";
+extern const char import_kw[] = "import";
+extern const char as_kw[] = "as";
+extern const char hiding_kw[] = "hiding";
+extern const char let_kw[] = "let";
+extern const char in_kw[] = "in";
+extern const char if_kw[] = "if";
+extern const char then_kw[] = "then";
+extern const char else_kw[] = "else";
+extern const char case_kw[] = "case";
+extern const char of_kw[] = "of";
+extern const char do_kw[] = "do";
+extern const char type_kw[] = "type";
+extern const char data_kw[] = "data";
+extern const char newtype_kw[] = "newtype";
+extern const char class_kw[] = "class";
+extern const char instance_kw[] = "instance";
+extern const char default_kw[] = "default";
+extern const char foreign_kw[] = "foreign";
+extern const char deriving_kw[] = "deriving";
+extern const char safe_kw[] = "safe";
+extern const char unsafe_kw[] = "unsafe";
+extern const char ccall_kw[] = "ccall";
+extern const char stdcall_kw[] = "stdcall";
+extern const char cplusplus_kw[] = "cplusplus";
+extern const char jvm_kw[] = "jvm";
+extern const char dotnet_kw[] = "dotnet_kw";
+extern const char export_kw[] = "export";
+extern const char infix_kw[] = "infix";
+extern const char infixl_kw[] = "infixl";
+extern const char infixr_kw[] = "infixr";
 typedef ttoken<module_kw> ModuleKw;
 typedef ttoken<where_kw> WhereKw;
 typedef ttoken<qualified_kw> QualifiedKW;
@@ -360,7 +370,13 @@ ASTPtr LetClause(const ASTPtr& ast)
 	}
 	return ast;
 }
-void hs()
+ASTPtr Pat(const ASTPtr& ast)
+{
+	cout << __PRETTY_FUNCTION__ << endl;
+	cout << "Pattern: " << ast->to_string() << endl;
+	return ast;
+}
+void hs(string& input)
 {
 	auto moduleKw = make_shared<ModuleKw>();// moduleKw;
 	auto whereKw = make_shared<WhereKw>();// whereKw;
@@ -411,35 +427,49 @@ void hs()
 	auto wildcard = make_shared<tch<'_'>>();
 	auto tilde = make_shared<tch<'~'>>();// tilde;
 	auto vertbar = make_shared<tch<'|'>>();
+	auto dot = make_shared<tch<'.'>>();
 	auto colonColon = make_shared<ColonColon>();// colonColon;
 	auto fnTo = make_shared<FnTo>();// fnTo;
 	auto patFrom = make_shared<PatFrom>();
 	auto contextTo = make_shared<ContextTo>();
 	auto dotdot = make_shared<DotDot>();
-	auto exportItem = ChoicesName("exportItem") || varID || conID;
-	auto exportComma = RLoop("exportComma",exportItem,comma);
-	auto exports = (SequenceName("exports") && lparen && exportComma && rparen);
 	auto varsym = make_shared<VarSym>();// varsym;
 	auto consym = make_shared<ConSym>();// consym;
 	auto hliteral = make_shared<NUM>() || make_shared<Quoted<'\''>>() || make_shared<Quoted<'"'>>();
 	hliteral->name = "hliteral";
-	//auto varop = Choice("varop",varsym,WSequence("varIDop",backTick,varID,backTick));
-	auto varop = varsym || (backTick && varID && backTick);
-	varop->name = "varop";
-	//auto conop = Choice("conop",consym,WSequence("conIDop",backTick,conID,backTick));
+	auto varop = ChoicesName("varop") || varsym || (SequenceName("varIDop") && backTick && varID && backTick);
 	auto conop = ChoicesName("conop") || consym || (SequenceName("conIDop") && backTick && conID && backTick);
-	auto qop = ChoicesName("qop")|| varop || conop;
+
+	auto modid = SequenceName("modid") && Repeat0(SequenceName("[conID.]") && conID && dot) && conID;
+
+	auto modQual = SequenceName("modQual") && Optional(SequenceName("modid.") && modid && dot);
+
+	auto qconsym = SequenceName("qconsym") && modQual && consym;
+	auto qvarid = SequenceName("qvarid") && modQual && varID;
+	auto qconid = SequenceName("qvarid") && modQual && conID;
+	auto qvarsym = SequenceName("qvarsym") && modQual && varsym;
+	auto qvarop = ChoicesName("qvarop") || qvarsym || (SequenceName("qvarIDop") && backTick && qvarid && backTick);
+	auto qconop = ChoicesName("qconop") || qconsym || (SequenceName("qconIDop") && backTick && qconid && backTick);
+	auto qop = ChoicesName("qop")|| qvarop || qconop;
 	auto unit = (SequenceName("unit") && lparen && rparen);
 	auto elist = (SequenceName("[]") && lbracket && rbracket);
 	auto etuple = (SequenceName("etuple") && lparen && Repeat1(",",comma) && rparen);
 	auto efn = (SequenceName("efn") && lparen && fnTo && rparen);
-	auto qconsym = consym;
+	auto qvar = ChoicesName("qvar") || qvarid || (SequenceName("(qvarsym)") && lparen && qvarsym && rparen);
 	auto gconsym = ChoicesName("gconsym") || colon || qconsym;
 	auto qcon = ChoicesName("qcon") || conID || (SequenceName("(gconsym)") && lparen && gconsym &&rparen);
 	auto gcon = ChoicesName("gcon") || unit || elist || etuple || qcon;
-	auto qvarid = varID;
-	auto qvarsym = varsym;
-	auto qvar = ChoicesName("qvar") || qvarid || (SequenceName("(qvarsym)") && lparen && qvarsym && rparen);
+
+	auto tycls = conID;
+	auto tyvar = varID;
+	auto tycon = conID;
+
+	auto qtycon = SequenceName("qtycon") && modQual && tycon;
+	auto qtycls = SequenceName("qtycls") && modQual && tycls;
+
+	auto exportItem = ChoicesName("exportItem") || qvar || conID;
+	auto exportComma = RLoop("exportComma",exportItem,comma);
+	auto exports = (SequenceName("exports") && lparen && exportComma && rparen);
 	auto expRef = make_shared<ParserReference>();
 	auto infixexpRef = make_shared<ParserReference>();
 	auto expRefComma = RLoop("expRefComma",expRef,comma);
@@ -485,9 +515,6 @@ void hs()
 						;
 	auto typeRef = make_shared<ParserReference>();
 	auto atypeRef = make_shared<ParserReference>();
-	auto tycls = conID;
-	auto qtycls = tycls;
-	auto tyvar = varID;
 	auto klass = ChoicesName("klass")
 						||(SequenceName("klassNulTyVar") && qtycls && tyvar)
 						||(SequenceName("klassMultiTyVar") && qtycls && lparen && tyvar && Repeat1("",atypeRef) && rparen)
@@ -507,8 +534,6 @@ void hs()
 
 
 	auto rhs = (SequenceName("rhs") && equals && exp);
-	auto tycon = conID;
-	auto qtycon = tycon;
 	auto gtycon = ChoicesName("gtycon") || qtycon || unit || elist || efn || etuple;
 	auto var = ChoicesName("var")
 						|| varID 
@@ -536,14 +561,24 @@ void hs()
 	btypeRef->resolve(btype);
 	auto type = RLoop("type", btype, fnTo); // aka btype [-> type]
 	typeRef->resolve(type);
-	auto gendecl = (SequenceName("gendecl") && Repeat1("varID",SkipWhite(varID)) && colonColon && type);
+	auto vars = RLoop("vars",var,comma);
+	auto infixl = make_shared<ttoken<infixl_kw>>();
+	auto infixr = make_shared<ttoken<infixr_kw>>();
+	auto infix = make_shared<ttoken<infix_kw>>();
+	auto fixity = ChoicesName("fixity")|| infixl || infixr || infix;
+	auto op = ChoicesName("op") || varop || conop;
+	auto ops = Repeat1("ops",SkipWhite(op));
+	auto gendecl = ChoicesName("gendecl")
+					|| (SequenceName("vars::type") && vars && Optional(context && contextTo) && colonColon && type)
+					|| (SequenceName("opfixity") && fixity && Optional(make_shared<NUM>()) && ops)
+					;
 	auto apatRef = make_shared<ParserReference>();
 	auto fpat = (SequenceName("fpat") && varID && equals && patRef);
 	auto patternComma = RLoop("patternComma",patRef,comma);
 	auto patterns = ChoicesName("patterns")
 						|| (SequenceName("(pat)") && lparen && patRef && rparen)
 						|| (SequenceName("(pat,pat)") && lparen && patternComma && rparen)
-						|| (SequenceName("[pat,pat]") && lbracket && patternComma && lbracket)
+						|| (SequenceName("[pat,pat]") && lbracket && patternComma && rbracket)
 						|| (SequenceName("~apat") && tilde && apatRef)
 						;
 	auto apat = ChoicesName("apat")
@@ -556,37 +591,38 @@ void hs()
 	apatRef->resolve(apat);
 	auto funlhsRef = make_shared<ParserReference>();// funlhsRef;
 	auto funlhs = ChoicesName("funlhs")
-						|| (SequenceName("var apat+") && varID && Repeat1("apat+",SkipWhite(apat)))
+						|| (SequenceName("var apat+") && var && Repeat1("apat+",SkipWhite(apat)))
 						|| (SequenceName("pat,varop,pat") && patRef && varop && patRef)
-						|| (SequenceName("(funlhs)apat") && lparen && funlhsRef && rparen && Repeat1("apat+",SkipWhite(apat)))
+						|| (SequenceName("(funlhs)apat+") && (lparen && funlhsRef) && rparen && Repeat1("apat+",SkipWhite(apat)))
 						;
+	cout << "funlhs examination " << funlhs->name << " id " << funlhs->parser_id << " has " << funlhs->choices.size() << " parsers " << endl;
+	for (size_t c =0; c<funlhs->choices.size(); ++c)
+		cout << "funlhs examination " << funlhs->name << " id " << funlhs->parser_id << " parser["<<c<<"] "
+				<< funlhs->choices[c]->name << endl;
 	funlhsRef->resolve(funlhs);
-	auto qconop = ChoicesName("qconop")
-						|| gconsym 
-						|| (SequenceName("`conID`") && backTick && conID && backTick)
-						;
 	auto lpat = ChoicesName("lpat")
 						||apat
 						||(SequenceName("gcon apat+") && gcon && Repeat1("apat+",SkipWhite(apat)))
 						;
-	auto pat = ChoicesName("pat")
+	auto pat = make_shared<ActionCaller>(Pat, ChoicesName("pat")
 						||(SequenceName("lpat,qconop,pat") && lpat && qconop && patRef)
 						||lpat
-						;
+						);
 	patRef->resolve(pat);
 	auto decl = make_shared<ActionCaller>(Decl, ChoicesName("decl")
 						||gendecl
-						||(SequenceName("funlhs|pat rhs") && (ChoicesName("funlhs|pat") ||funlhs ||pat) && rhs)
+						||(SequenceName("funlhs|pat rhs") && (ChoicesName("funlhs|pat") || funlhs ||pat) && rhs)
 						);
-	auto decls = RLoop("decls",decl,semicolon);
+	auto decls = SequenceName("decls") && lbrace && RLoop("decl;",decl,semicolon) && rbrace;
 	auto qual = ChoicesName("qual")
-				|| pat && patFrom && expRef
+				|| SequenceName("pat<-exp")&& pat && patFrom && expRef
 				|| lets
 				|| expRef
 				;
 	auto isntminus = Isnt(minus);
 	auto isntqcon = Isnt(qcon);
-	auto aexp = varID  
+	auto aexp = ChoicesName("aexp")
+				|| qvar
 				|| gcon
 				|| hliteral
 				|| (SequenceName("(exp)") && lparen && expRef && rparen)
@@ -609,14 +645,12 @@ void hs()
 				//  with a little isntqcon action thrown in.
 				//  but for now I want to debug let forms.
 				;
-	aexp->name = "aexp";
 	aexpRef->resolve(aexp);
 	//auto fexp = WSequence(Optional(fexpRef),aexp);
 	auto fexp = Repeat1("fexp",SkipWhite(aexp));
 	fexpRef->resolve(fexp);
 	auto exclam = make_shared<tch<'!'>>();
-	auto vars = RLoop("vars",var,comma);
-	auto fielddecl = vars && colonColon && (type || (exclam && atype));
+	auto fielddecl = SequenceName("fielddecl") && vars && colonColon && (type || (exclam && atype));
 	auto constr = ChoicesName("constrs")
 						|| SequenceName("con atype") && con && Repeat0(SkipWhite(Optional(exclam)) && SkipWhite(atype))
 						|| SequenceName("type conop type") && (btype || (exclam && atype)) && conop && (btype || (exclam && atype))
@@ -625,46 +659,48 @@ void hs()
 	auto constrs = RLoop("constrs",constr,vertbar);
 	auto simpletype = SequenceName("simpletype") && tycon && Repeat1("tyvars", SkipWhite(tyvar));
 	auto newconstr = ChoicesName("newconstr")
-						|| con && atype
-						|| con && lbrace && var && colonColon && type && rbrace
+						|| SequenceName("con atype") && con && atype
+						|| SequenceName("con{var::type}") && con && lbrace && var && colonColon && type && rbrace
 						;
 	auto simpleclass = SequenceName("simpleclass") && qtycls && tyvar ;
 	auto scontext = ChoicesName("scontext")
 						|| simpleclass
-						|| lparen && RLoop("simpleclass,", simpleclass, comma) && rparen
+						|| SequenceName("(simpleclass,)")&& lparen && RLoop("simpleclass,", simpleclass, comma) && rparen
 						;
+	auto funlhsvar = ChoicesName("funlhsvar") || funlhs || var;
 	auto cdecl_  = ChoicesName("cdecl")
 						|| gendecl
-						|| (funlhs || var ) && rhs
+						|| SequenceName("(funlhs|var) rhs") && funlhsvar && rhs
 						;
-	auto cdecls = SequenceName("cdecls") && lparen && RLoop("cdecl,",cdecl_,comma) && rparen ;
+	auto cdecls = SequenceName("(cdecls,)") && lparen && RLoop("cdecl,",cdecl_,comma) && rparen ;
 	auto inst = ChoicesName("inst")
 						|| gtycon
-						|| lparen && gtycon && Repeat0(tyvar) && rparen
-						|| lparen && RLoop("tyvar,",tyvar,comma) && rparen
-						|| lbracket && tyvar && rbracket
-						|| lparen && tyvar && fnTo && tyvar && rparen
+						|| SequenceName("(gtycon tyvar*)")&& lparen && gtycon && Repeat0(tyvar) && rparen
+						|| SequenceName("(tyvar,)")&&lparen && RLoop("tyvar,",tyvar,comma) && rparen
+						|| SequenceName("[tyvar]")&& lbracket && tyvar && rbracket
+						|| SequenceName("(tyvar->tyvar)") && lparen && tyvar && fnTo && tyvar && rparen
 						;
-	auto idecl = Optional((funlhs || var) && rhs);
+	auto idecl = SequenceName("(funlhs|var)?rhs") && Optional(funlhsvar) && rhs;
 	auto idecls = SequenceName("idecls") && lbrace && RLoop("idecl,",idecl, comma) && rbrace ;
 	auto optString = Optional(make_shared<Quoted<'"'>>());
 	auto impent = optString;
 	auto expent = optString;
-	auto safety = safeKw || unsafeKw;
-	auto callconv = ccallKw || stdcallKw || cplusplusKw || jvmKw || dotnetKw ;
-	auto fatype = qtycon && Repeat0(atype) ;
+	auto safety = ChoicesName("safety") || safeKw || unsafeKw;
+	auto callconv = ChoicesName("callconv") || ccallKw || stdcallKw || cplusplusKw || jvmKw || dotnetKw ;
+	auto fatype = SequenceName("fatype") && qtycon && Repeat0(atype) ;
 	auto frtype = fatype
 				|| unit 	
 				;
 	auto ftypeRef = make_shared<ParserReference>();
-	auto ftype = frtype
-				|| fatype && fnTo && ftypeRef
-				;
+	auto ftype = ChoicesName("ftype")
+					|| frtype
+					|| SequenceName("fatype->ftype") && fatype && fnTo && ftypeRef
+					;
 	ftypeRef->resolve(ftype);
   
 	auto fdecl = ChoicesName("fdecl")
-						|| importKw && callconv && Optional(safety) && impent && var && colonColon && ftype
-						|| exportKw && callconv && expent && var && colonColon && ftype
+						|| SequenceName("import") && importKw && callconv && Optional(safety) && impent && var && colonColon && ftype
+						|| SequenceName("export") && exportKw && callconv && expent && var && colonColon && ftype
 						;
 	auto topdecl = ChoicesName("topdecl")
 						|| SequenceName("type") && typeKw && simpletype && equals && type
@@ -690,16 +726,15 @@ void hs()
 	auto impdecl = (SequenceName("impdecl") && importKw && Optional(qualifiedKw)&& moduleID && Optional((SequenceName("as modopt") && asKw && moduleID)) && Optional(impspec));
 	auto imports = RLoop2("imports", impdecl, semicolon);
 	auto body = ChoicesName("body")
-						|| (SequenceName("bodyOfDeclsWithImports") && lbrace && imports && /*semicolon && */ decls && rbrace)
+						|| (SequenceName("bodyOfDeclsWithImports") && lbrace && imports && /*semicolon && */ topdecls && rbrace)
 		                || (SequenceName("bodyOfImports") && lbrace && imports && rbrace)
 						|| (SequenceName("bodyOfTopDecls") && lbrace && topdecls && rbrace)
 						;
-	auto module = (SequenceName("module") && moduleKw && moduleID && exports && whereKw && body);
-	string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference :: a->a; circumference r=2*pi*r; party = let a=5 in a }");
-	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r; party = let a=5 in a }");
-	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r }");
-	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4= \\a->a+1; circumference r=2*pi*r }");
-	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; circumference r=2*pi*r }");
+	auto module = (SequenceName("module") && Optional(moduleKw && moduleID && exports && whereKw) && body);
+	cout << "funlhs examination " << funlhs->name << " id " << funlhs->parser_id << " has " << funlhs->choices.size() << " parsers " << endl;
+	for (size_t c =0; c<funlhs->choices.size(); ++c)
+		cout << "funlhs examination " << funlhs->name << " id " << funlhs->parser_id << " parser["<<c<<"] "
+				<< funlhs->choices[c]->name << endl;
 	ParseStatePtr st = make_shared<ParseState>(input);
 	ParseResultPtr r = (*module)(st);
 	if (r)
@@ -713,9 +748,404 @@ void hs()
 		cout << "r==null" << endl;
 	}
 }
+class reservedWord : public ParserBase
+{
+public:
+	reservedWord() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		size_t i=0;
+		while (start->at(i)!=' ' && start->at(i)!='\t' && start->at(i)!='\n' && start->at(i)!='\r' && start->at(i)!=0)
+			++i;
+		//if (i!=0)
+		//	cout << __PRETTY_FUNCTION__ << ' ' << "trying [" << start->substr(0,i) << ']'<< endl;
+		if (reservedid(start->substr(0,i)))
+		{
+			//cout << __PRETTY_FUNCTION__ << ' ' << "advancing " << *(start->from(i)) << endl;
+			return make_shared<ParseResult>(start->from(i), make_shared<StringAST>(start->substr(0,i)));
+		}
+		return ParseResultPtr();
+	}
+};
+class reservedOperator : public ParserBase
+{
+public:
+	reservedOperator() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		size_t i=0;
+		while (asciiSymbolChar(start->at(i)))
+			++i;
+		if (i==0)
+			return ParseResultPtr();
+		//cout << __PRETTY_FUNCTION__ << ' ' << "trying [" << start->substr(0,i) << ']'<< endl;
+		if (reservedOp(start->substr(0,i)))
+		{
+			//cout << __PRETTY_FUNCTION__ << ' ' << "advancing " << *(start->from(i)) << endl;
+			return make_shared<ParseResult>(start->from(i), make_shared<StringAST>(start->substr(0,i)));
+		}
+		return ParseResultPtr();
+	}
+};
+class specialChar : public ParserBase
+{
+public:
+	specialChar() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		switch (start->at(0))
+		{
+		case '(': case ')': case ',': case '[': case ']': case '`': case '{': case '}':
+			return make_shared<ParseResult>(start->from(1), make_shared<StringAST>(start->substr(0,1)));
+		default:
+			return ParseResultPtr();
+		}
+	}
+};
+class whiteSpace : public ParserBase
+{
+public:
+	whiteSpace() {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		size_t i=0;
+		while (start->at(i)==' ' || start->at(i)=='\t' || start->at(i)=='\n' || start->at(i)=='\r')
+			++i;
+		return make_shared<ParseResult>(start->from(i), make_shared<StringAST>(start->substr(0,i)));
+	}
+};
+class layoutTracker
+{
+public:
+	layoutTracker()
+	: column(0)
+	, line(0)
+	, lastNewline(0)
+	,lastFirstBlank(0)
+	,blanksOnly(true)
+	,moduleStart(true)
+	,kwNeedsBrace(false)
+	,yield(' ')
+	{}
+	int column;
+	int line;
+	int lastNewline;
+	int lastFirstBlank;
+	bool blanksOnly;
+	bool moduleStart;
+	bool kwNeedsBrace;
+	int yield;
+	struct LayoutToken
+	{
+		enum Type { Brace, Angle, Text, Space };
+		Type type;
+		string text;
+		int column;
+	};
+	std::list<LayoutToken> pendingInput;
+	std::stack<int> indents;
+	void post(const string& token)
+	{
+		if (token[0]!=' ' && token[0]!='\t' && token[0]!='\r' && token[0] != '\n')
+		{
+			if (kwNeedsBrace && token!="{")
+			{
+				LayoutToken lt;
+				lt.type = LayoutToken::Brace;
+				lt.column = column;
+				pendingInput.push_back(lt);
+				kwNeedsBrace = false;
+			}
+			if (token=="let" || token=="where" || token=="do"||token=="of")
+			{
+				kwNeedsBrace=true;
+				if (blanksOnly)
+				{
+					LayoutToken lt;
+					lt.type = LayoutToken::Angle;
+					lt.column = column;
+					pendingInput.push_back(lt);
+				}
+			}
+			else if (token=="{" && !moduleStart)
+			{
+				kwNeedsBrace=false;
+				if (blanksOnly)
+				{
+					LayoutToken lt;
+					lt.type = LayoutToken::Angle;
+					lt.column = column;
+					pendingInput.push_back(lt);
+				}
+			}
+			else if (moduleStart && (token!="{"&&token!="module"))
+			{
+				LayoutToken lt;
+				lt.type = LayoutToken::Brace;
+				lt.column = column;
+				pendingInput.push_back(lt);
+				moduleStart = false;
+			}
+			else
+			{
+				if (blanksOnly)
+				{
+					LayoutToken lt;
+					lt.type = LayoutToken::Angle;
+					lt.column = column;
+					pendingInput.push_back(lt);
+				}
+			}
+			LayoutToken lt;
+			lt.type = LayoutToken::Text;
+			lt.column = column;
+			lt.text = token;
+			pendingInput.push_back(lt);
+			blanksOnly = false;
+			lastFirstBlank = column;
+			column += token.size();
+		}
+		else
+		{
+			int prevColumn = column;
+			for (size_t i=0; i<token.size(); ++i)
+			{
+				int c = token[i];
+				switch (c)
+				{
+				case '\r': // These should just be no-ops
+					break;
+				case '\n':
+					lastNewline = column;
+					column = 1;
+					++line;
+					blanksOnly = true;
+					break;
+				case '\t':
+					column = column + 8-(column%8);
+					break;
+				case ' ':
+					column++;
+					break;
+				default:
+					cout << "****** " << endl;
+					blanksOnly = false;
+					lastFirstBlank = column;
+					column++;
+					break;
+				}
+			}
+			LayoutToken lt;
+			lt.type = LayoutToken::Space;
+			lt.column = prevColumn;
+			lt.text = token;
+			pendingInput.push_back(lt);
+		}
+	}
+	bool empty() const {
+		return false;
+	}
+	string next()
+	{
+		//cout << "What's next "; status(); cout << endl;
+		if (pendingInput.size()>0 && pendingInput.front().type == LayoutToken::Angle)
+		{
+			int n = pendingInput.front().column;
+			int m = indents.top();
+			//cout << "Official handling of <" << n << "> vs indent m "<< m << endl;
+			if (n==m)
+			{
+				pendingInput.pop_front();
+				//cout << "Returning ;" << endl;
+				return ";";
+			}
+			if (n<m)
+			{
+				indents.pop();
+				//cout << "Returning }" << endl;
+				return "}";
+			}
+		}
+		if (pendingInput.size()>0 && pendingInput.front().type==LayoutToken::Brace)
+		{
+			int n = pendingInput.front().column;
+			int m = -1;
+			if (indents.size()) m = indents.top();
+			if (n > m)
+			{
+				pendingInput.pop_front();
+				indents.push(n);
+				//cout << "Returning {" << endl;
+				return "{";
+			}
+			if (indents.empty())
+			{
+				pendingInput.pop_front();
+				indents.push(n);
+				//cout << "Returning {" << endl;
+				return "{";
+			}
+			pendingInput.front().type = LayoutToken::Angle;
+			//cout << "Returning {}" << endl;
+			return "{}";
+		}
+		if (pendingInput.size()>0 && pendingInput.front().type==LayoutToken::Text)
+		{
+			int m = indents.top();
+			if (pendingInput.front().text=="}" && m==0)
+			{
+				indents.pop();
+				pendingInput.pop_front();
+				//cout << "Returning }" << endl;
+				return "}";
+			}
+			if (pendingInput.front().text=="}")
+			{
+				cout << " ---------------------- error" << endl;
+			}
+			if (pendingInput.front().text=="{")
+			{
+				indents.push(0);
+				pendingInput.pop_front();
+				//cout << "Returning {" << endl;
+				return "{";
+			}
+			// There's also the parse error case but I'm not parsing
+			string r = pendingInput.front().text;
+			pendingInput.pop_front();
+			//cout << "Returning " << r << endl;
+			return r;
+		}
+		if (pendingInput.size()>0 && pendingInput.front().type == LayoutToken::Space)
+		{
+			string r = pendingInput.front().text;
+			pendingInput.pop_front();
+			//cout << "Returning " << r << endl;
+			return r;
+		}
+		if (pendingInput.empty() && indents.empty())
+		{
+			//cout << "Returning ''" << endl;
+			return "";
+		}
+		if (pendingInput.empty() && indents.top()!=0)
+		{
+			indents.pop();
+			//cout << "Returning }" << endl;
+			return "}";
+		}
+		cout << "Fell off the end why? ";
+		status();
+		cout << endl;
+		return "";
+	}
+	void status()
+	{
+		if (pendingInput.size())
+		{
+			cout << " n ";
+			if (pendingInput.front().type==LayoutToken::Angle)
+				cout << "<" << pendingInput.front().column << ">";
+			else if (pendingInput.front().type == LayoutToken::Brace)
+				cout << "{" << pendingInput.front().column << "}";
+			else if (pendingInput.front().type == LayoutToken::Text)
+				cout << pendingInput.front().column << ' ' << pendingInput.front().text.substr(0,3);
+			else
+				cout << pendingInput.front().column << ' ' << pendingInput.front().text.size() << " ws chrs";
+			cout << " ";
+		}
+		else
+		{
+			cout << " n 0 ";
+		}
+		if (indents.size())
+		{
+			cout << " m " << indents.top();
+		}
+	}
+};
+string layout(std::istream& file)
+{
+	string input;
+	string line;
+	while (file)
+	{
+		line="";
+		std::getline(file,line);
+		if (line.size())
+		{
+			input += '\n';
+			input += line;
+		}
+	}
+	cout << "layout [\n" << input << "\n]"<< endl;
+	auto tp = make_shared<VarID>()
+			|| make_shared<ConID>()
+			|| make_shared<VarSym>()
+			|| make_shared<ConSym>()
+			|| make_shared<NUM>()
+			|| make_shared<Quoted<'"'>>()
+			|| make_shared<reservedWord>()
+			|| make_shared<reservedOperator>()
+			|| make_shared<specialChar>()
+			|| make_shared<whiteSpace>()
+			;
+	ParseStatePtr start = make_shared<ParseState>(input);
+	string results;
+	layoutTracker tracker;
+	while (start->at(0)!=0)
+	{
+		ParseResultPtr token = (*tp)(start);
+		if (!token)
+		{
+			cout << "No token" << endl;
+			break;
+		}
+		if (token->getAST()->to_string().size()==0)
+		{
+			cout << "zero-length token " << *(token->getState()) << endl;
+			break;
+		}
+		tracker.post(token->getAST()->to_string());
+		string yield = tracker.next();
+		if (yield != "")
+			results += yield;
+		start = token->getState();
+		if (start->at(0)==0)
+			cout << "Nothing left" << endl;
+	}
+	while (tracker.pendingInput.size()||tracker.indents.size())
+	{
+		string nxt = tracker.next();
+		if (nxt[0]==' '||nxt[0]=='\t'||nxt[0]=='\r'||nxt[0]=='\n')
+			results += '\n'+nxt;
+		else
+			results += nxt;
+	}
+	return results;
+}
+extern bool showFails;
+extern bool showRemainder;
 int main(int argc, const char* argv[]) {
 	cout << "PEGHS starts" << endl;
-	hs();
+	std::ifstream file;
+	if (argc > 1)
+	{
+		file.open(argv[1]);
+		string laidout = layout(file);
+		cout << "laid out " << laidout << endl;
+		ParseState::reset();
+		hs(laidout);
+		return 0;
+	}
+	showFails = true;
+	showRemainder = true;
+	string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference :: a->a; circumference r=2*pi*r; party = let { a=5 } in a }");
+	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r; party = let a=5 in a }");
+	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4=(\\a->a+1) 5; circumference r=2*pi*r }");
+	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; name4= \\a->a+1; circumference r=2*pi*r }");
+	//string input("module Kindred (nails, snails, Puppydog.tails) where { import qualified Quality.Goods as Goods (machinery); name1=a; name2=b*c; name3=d<<e>>===f; circumference r=2*pi*r }");
+	hs(input);
 
 	tests();
 	return 0;

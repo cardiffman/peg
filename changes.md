@@ -1,3 +1,36 @@
+20130624:
+Layout! Input from a file!
+
+peghs adds two important features
+1) Commandline interface for selecting an input file.
+2) When an input file is selected it is laid out before parsing.
+Currently the resulting layout is displayed before the parse starts.
+This has only been tested on one file, which is a piece of the code from 
+Dr. Conrad Barski's tutorial @ http://lisperati.com/haskell/
+
+If a file is not given as the argument then the old built-in one-liner 
+is parsed.
+
+Other changes to peghs:
+
+ConSym major bug fix.
+Quoted understands escape sequence and returns correct AST.
+Text for the keywords is now declared without warnings.
+The basic qsomething productions are now implemented correctly.
+gendecl is completed.
+The [pat,pat] term of patterns has correct brackets.
+There is apparently a bug in the interaction between operator&& and 
+ParserReference which affects affects funlhs' reference to itself. The bug is 
+worked-around with an extra pair of parentheses in the expression.
+
+Library-level changes:
+
+ParserBase now has the name of the parser, which can be initialized via c-tor
+Parsers in peg.h and peghs.cpp all use that name in diagnostics.
+Display of remaining input after successful parse is optional (showRemainder)
+Display of remaining input and parser names after parse failure is optional (showFails)
+Some attention has been given to the output so it is more consistent.
+
 20130616:
 Updated the Makefile to build a debugging executable and to use -MMD to track
 the headers. Found that a few of the parsers, especially optional<t>, were
