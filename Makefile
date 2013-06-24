@@ -17,9 +17,9 @@ peghs: peghs.o libpeg.a
 	g++ -g -o peghs peghs.o -L. -lpeg
 
 peg_alphanum: peg_alphanum.o libpeg.a
-	g++ -o peg_alphanum peg_alphanum.o -L. -lpeg
+	g++ -g -o peg_alphanum peg_alphanum.o -L. -lpeg
 
 peg_arithmetic: peg_arithmetic.o libpeg.a
-	g++ -o peg_arithmetic peg_arithmetic.o -L. -lpeg
+	g++ -g -o peg_arithmetic peg_arithmetic.o -L. -lpeg
 
 -include *.d
