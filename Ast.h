@@ -23,6 +23,14 @@ public:
 private:
 	int value;
 };
+class FloatAST : public AST
+{
+public:
+	FloatAST(double value) : value(value) {}
+	std::string to_string() const;
+private:
+	double value;
+};
 class IdentifierAST : public AST
 {
 public:
@@ -35,6 +43,15 @@ class StringAST : public AST
 {
 public:
 	StringAST(const std::string& name) : name(name) {}
+	std::string to_string() const { return name; }
+private:
+	std::string name;
+};
+class CharAST : public AST
+{
+public:
+	CharAST(const std::string& name) : name(name) {}
+	explicit CharAST(int name) : name(1,name) {}
 	std::string to_string() const { return name; }
 private:
 	std::string name;

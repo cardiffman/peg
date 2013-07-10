@@ -8,6 +8,13 @@ std::string IntegerAST::to_string() const
 	return os.str(); 
 }
 
+std::string FloatAST::to_string() const
+{
+	std::ostringstream os;
+	os << value;
+	return os.str();
+}
+
 std::string SequenceAST::to_string() const 
 {
 	std::ostringstream os;

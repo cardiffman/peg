@@ -13,6 +13,9 @@
 #include <list>
 #include <stack>
 
+#ifdef _MSC_VER
+#define __PRETTY_FUNCTION__ __FUNCTIONW__
+#endif
 using std::string;
 using std::make_shared;
 using std::shared_ptr;
@@ -111,6 +114,582 @@ bool asciiSymbolCharExceptColon(int ch)
 	}
 	return false;
 }
+class CommentAST : public AST
+{
+public:
+	CommentAST() {}
+	string to_string() const { return " "; }
+};
+struct Comment : public ParserBase
+{
+	Comment() : ParserBase("Comment") {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		size_t ic=0;
+		if (start->length() > 2 && start->at(0)=='-' && start->at(1)=='-')
+		{
+			if (start->length()>3 && !asciiSymbolChar(start->at(2)))
+			{
+				//The first two chars are dashes and the first three chars are not a symbol
+				//So we have a comment that ends at a newline
+				ic=3;
+				while (start->length()> ic && start->at(ic) != '\n')
+					++ic;
+				//return make_shared<ParseResult>(start->from(ic), make_shared<StringAST>(start->substr(0, ic)));
+				return make_shared<ParseResult>(start->from(ic), make_shared<CommentAST>());
+			}
+		}
+		return ParseResultPtr();
+	}
+};
+struct NComment : public ParserBase
+{
+	NComment() : ParserBase("NComment") {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		size_t ic=0;
+		if (start->length() > 4 && start->at(0)=='{' && start->at(1)=='-')
+		{
+			//The first two chars open a nested comment.
+			//So we have a comment that ends at a newline
+			ic=2;
+			int open=1;
+			while (start->length()> ic && open>0)
+			{
+				if (start->length() > ic+2*open+1 && start->at(ic)=='{' && start->at(ic)=='-')
+				{
+					ic+= 2;
+					open++;
+				}
+				else if (start->length() > ic+1 && start->at(ic) == '-' && start->at(ic+1) == '}')
+				{
+					ic+= 2;
+					open--;
+				}
+				else
+				{
+					++ic;
+				}
+			}
+			//return make_shared<ParseResult>(start->from(ic), make_shared<StringAST>(start->substr(0, ic)));
+			return make_shared<ParseResult>(start->from(ic), make_shared<CommentAST>());
+		}
+		return ParseResultPtr();
+	}
+};
+struct HaskellNumber : public ParserBase
+{
+	HaskellNumber() : ParserBase("HaskellNumber") {}
+	bool hexLetter(int c)
+	{
+		switch (tolower(c))
+		{
+		case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
+			return true;
+		default:
+			return false;
+		}
+	}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		size_t ic=0;
+		if (start->length()> 0 && isdigit(start->at(0)))
+		{
+			++ic;
+			// Definitely some sort of number
+			if (start->at(0)=='0' && (start->at(1)=='x'||start->at(1)=='X'))
+			{
+				++ic; // hex prefix
+				while (isxdigit(start->at(ic)))
+					++ic;
+				if (ic < 3)
+					return ParseResultPtr();
+				unsigned long value;
+				value = strtoul(start->substr(0,ic).c_str(),NULL,16);
+				return make_shared<ParseResult>(start->from(ic), make_shared<IntegerAST>(value));
+			}
+			else if (start->at(0)=='0' && tolower(start->at(1)=='o'))
+			{
+				++ic; // octal prefix
+				while (isdigit(start->at(ic))&& start->at(ic)<'8')
+				{
+					++ic;
+				}
+				if (ic < 3)
+					return ParseResultPtr();
+				unsigned long value;
+				value = strtoul(start->substr(0,ic).c_str(),NULL,8);
+				return make_shared<ParseResult>(start->from(ic), make_shared<IntegerAST>(value));
+			}
+			// The other cases are decimal integers and floating point numbers
+			while (isdigit(start->at(ic)))
+				++ic;
+			bool parseReal = false;
+			if (start->at(ic)=='.')
+			{
+				parseReal=true;
+				++ic;
+				int fstart=ic;
+				while (isdigit(start->at(ic)))
+					++ic;
+				if (ic==fstart) // if no fraction digits, violates lexical level
+					return ParseResultPtr();
+			}
+			if (tolower(start->at(ic))=='e')
+			{
+				parseReal=true;
+				++ic;
+				int estart = ic;
+				if (start->at(ic)=='+'||start->at(ic)=='-')
+				{
+					++ic;
+					estart = ic;
+				}
+				while (isdigit(start->at(ic)))
+					++ic;
+				if (ic==estart)
+					return ParseResultPtr();
+			}
+			if (parseReal)
+			{
+				double dvalue;
+				dvalue = strtod(start->substr(0,ic).c_str(),NULL);
+				return make_shared<ParseResult>(start->from(ic), make_shared<FloatAST>(dvalue));
+			}
+			unsigned long ivalue;
+			ivalue = strtoul(start->substr(0,ic).c_str(),NULL,8);
+			return make_shared<ParseResult>(start->from(ic), make_shared<IntegerAST>(ivalue));
+		}
+		return ParseResultPtr();
+	}
+};
+ParseResultPtr small(const ParseStatePtr& start)
+{
+	if ((islower(start->at(0)) && isalpha(start->at(0)))||start->at(0)=='_')
+		return make_shared<ParseResult>(start->from(1), make_shared<CharAST>(start->at(0)));
+	return ParseResultPtr();
+}
+ParseResultPtr large(const ParseStatePtr& start)
+{
+	if (isupper(start->at(0)) && isalpha(start->at(0)))
+		return make_shared<ParseResult>(start->from(1), make_shared<CharAST>(start->at(0)));
+	return ParseResultPtr();
+}
+ParseResultPtr symbol(const ParseStatePtr& start)
+{
+	if (asciiSymbolChar(start->at(0)))
+		return make_shared<ParseResult>(start->from(1), make_shared<CharAST>(start->at(0)));
+	return ParseResultPtr();
+}
+ParseResultPtr digit(const ParseStatePtr& start)
+{
+	if (isdigit(start->at(0)))
+		return make_shared<ParseResult>(start->from(1), make_shared<CharAST>(start->at(0)));
+	return ParseResultPtr();
+}
+ParseResultPtr special(const ParseStatePtr& start)
+{
+	switch (start->at(0))
+	{
+	case '(': case ')': case ',': case ';': case '[': case ']': case '`': case '{': case '}':
+		return make_shared<ParseResult>(start->from(1), make_shared<CharAST>(start->at(0)));
+	}
+	return ParseResultPtr();
+}
+ParseResultPtr graphic(const ParseStatePtr& start)
+{
+	// small | large | symbol | digit | special | " | '
+	ParseResultPtr r = small(start);
+	if (r) return r;
+	r = large(start);
+	if (r) return r;
+	r = symbol(start);
+	if (r) return r;
+	r = digit(start);
+	if (r) return r;
+	r = special(start);
+	if (r) return r;
+	if (start->at(0)=='"' || start->at(0)=='\'')
+	{
+		return make_shared<ParseResult>(start->from(1), make_shared<CharAST>(start->at(0)));
+	}
+	return ParseResultPtr();
+}
+ParseResultPtr asciiEscape(const ParseStatePtr& start)
+{
+	size_t ic = 0;
+	if (start->at(ic)=='^')
+	{
+		++ic;
+		if (isupper(start->at(ic))&&isalpha(start->at(ic)))
+			return make_shared<ParseResult>(start->from(2), make_shared<CharAST>(start->at(ic)-64));
+		else switch (start->at(ic))
+		{
+		case '@': case '[': case '\\': case ']': case '^': case '_':
+			return make_shared<ParseResult>(start->from(2), make_shared<CharAST>(start->at(ic)-64));
+		default:
+			return ParseResultPtr();
+		}
+	}
+	// We tried ^something, let's try the names now
+	// The overall effect is that '\NUL' is a legitimate character literal.
+	int v = -1;
+	string nm;
+	if (start->length()>=2) // the two-letter names are possible
+	{
+		nm = start->substr(0,2);
+		if (nm == "BS") v=8;
+		else if (nm == "HT") v=9;
+		else if (nm == "LF") v=10;
+		else if (nm == "VT") v=11;
+		else if (nm == "FF") v=12;
+		else if (nm == "CR") v=13;
+		else if (nm == "SO") v=14;
+		else if (nm == "SI") v=15;
+		else if (nm == "EM") v=25;
+		else if (nm == "FS") v=28;
+		else if (nm == "GS") v=29;
+		else if (nm == "RS") v=30;
+		else if (nm == "US") v=31;
+		else if (nm == "SP") v=32;
+	}
+	if (v==-1 && start->length()>=3) // three-letter possibilities
+	{
+		nm = start->substr(0,3);
+		if (nm=="NUL") v=0;  else if (nm=="SOH") v=1;  else if (nm=="STX") v=2;  else if (nm=="ETX") v=3;  else if (nm=="EOT") v=4;  else if (nm=="ENQ") v=5;  else if (nm=="ACK") v=6;  else if (nm=="BEL") v=7;
+		else if (nm=="DLE") v=16; else if (nm=="DC1") v=17; else if (nm=="DC2") v=18; else if (nm=="DC3") v=19; else if (nm=="DC4") v=20; else if (nm=="NAK") v=21; else if (nm=="SYN") v=22; else if (nm=="ETB") v=23;
+		else if (nm=="CAN") v=24;
+		else if (nm=="SUB") v=26; else if (nm=="ESC") v=27;
+		else if (nm=="DEL") v=127;
+	}
+	if (v != -1)
+	{
+		return make_shared<ParseResult>(start->from(nm.size()), make_shared<CharAST>(v));
+	}
+	return ParseResultPtr();
+}
+ParseResultPtr escape(const ParseStatePtr& start)
+{
+	size_t ic = 0;
+	if (start->at(ic)!='\\')
+	{
+		cout << "escape: Not a backslash here." << endl;
+		return ParseResultPtr();
+	}
+	if (start->at(ic)=='\\')
+	{
+		++ic;
+		int v = -1;
+		switch (start->at(ic))
+		{
+		case 'a':
+			v = 7;
+			break;
+		case 'b':
+			v = 8;
+			break;
+		case 'f':
+			v = 12;
+			break;
+		case 'n':
+			v = 10;
+			break;
+		case 'r':
+			v = 13;
+			break;
+		case 't':
+			v = 9;
+			break;
+		case 'v':
+			v = 11;
+			break;
+		case '\\':
+			v = '\\';
+			break;
+		case '"':
+			v = '"';
+			break;
+		case '\'':
+			v = '\'';
+			break;
+		case '&':
+			v = -2;
+			break;
+		default:
+			break;
+		}
+		if (v==-2)
+			return make_shared<ParseResult>(start->from(2), make_shared<CharAST>(-1));
+		if (v!=-1)
+			return make_shared<ParseResult>(start->from(2), make_shared<CharAST>(v));
+		if (isdigit(start->at(ic)))
+		{
+			++ic;
+			while (isdigit(start->at(ic)))
+				++ic;
+			unsigned long value = strtoul(start->substr(1,ic).c_str(),NULL,10);
+			return make_shared<ParseResult>(start->from(ic), make_shared<CharAST>(value));
+		}
+		if (start->at(ic)=='x')
+		{
+			++ic;
+			while (isxdigit(start->at(ic)))
+				++ic;
+			unsigned long value = strtoul(start->substr(2,ic).c_str(),NULL,16);
+			return make_shared<ParseResult>(start->from(ic), make_shared<CharAST>(value));
+		}
+		if (start->at(ic)=='o')
+		{
+			++ic;
+			while (isdigit(start->at(ic)) && start->at(ic)<'8')
+				++ic;
+			unsigned long value = strtoul(start->substr(2,ic).c_str(),NULL,8);
+			return make_shared<ParseResult>(start->from(ic), make_shared<CharAST>(value));
+		}
+		ParseResultPtr r = asciiEscape(start->from(1));
+		if (r)
+		{
+			return make_shared<ParseResult>(r->getState(), r->getAST());
+		}
+		//
+	}
+	return ParseResultPtr();
+}
+string AppendRepToString(int chr, const string& dest)
+{
+	string out = dest;
+	switch (chr)
+	{
+	case 0:
+		out += "\\NUL"; break;
+	case 1:
+		out += "\\SOH"; break;
+	case 2:
+		out += "\\STX"; break;
+	case 3:
+		out += "\\ETX"; break;
+	case 4:
+		out += "\\EOT"; break;
+	case 5:
+		out += "\\ENQ"; break;
+	case 6:
+		out += "\\ACK"; break;
+	case 7:
+		out += "\\a"; break;
+	case 8:
+		out += "\\b"; break;
+	case 9:
+		out += "\\t"; break;
+	case 10:
+		out += "\\n"; break;
+	case 11:
+		out += "\\v"; break;
+	case 12:
+		out += "\\f"; break;
+	case 13:
+		out += "\\r"; break;
+	case 14:
+		out += "\\SO"; break;
+	case 15:
+		out += "\\SI"; break;
+	case 16:
+		out += "\\DLE"; break;
+	case 17:
+		out += "\\DC1"; break;
+	case 18:
+		out += "\\DC2"; break;
+	case 19:
+		out += "\\DC3"; break;
+	case 20:
+		out += "\\DC4"; break;
+	case 21:
+		out += "\\NAK"; break;
+	case 22:
+		out += "\\SYN"; break;
+	case 23:
+		out += "\\ETB"; break;
+	case 24:
+		out += "\\CAN"; break;
+	case 25:
+		out += "\\EM"; break;
+	case 26:
+		out += "\\SUB"; break;
+	case 27:
+		out += "\\ESC"; break;
+	case 28:
+		out += "\\FS"; break;
+	case 29:
+		out += "\\GS"; break;
+	case 30:
+		out += "\\RS"; break;
+	case 31:
+		out += "\\US"; break;
+	case '"':
+		out += "\\\""; break;
+	case '\\':
+		out += "\\\\"; break;
+	default:
+		out += chr;
+		break;
+	}
+	return out;
+}
+class HaskellCharAST : public AST
+{
+public:
+	HaskellCharAST(const std::string& name) : name(name) {}
+	explicit HaskellCharAST(int name) : name(1,name) {}
+	std::string to_string() const {
+		string out = "'";
+		out = AppendRepToString(name[0], out);
+		out += "'";
+		return out;
+	}
+private:
+	std::string name;
+};
+class Char : public ParserBase
+{
+public:
+	Char() : ParserBase("Char") {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		size_t ic = 0;
+		//'(graphic<'|\> | space | escape<\&>)'
+		if (start->at(ic)=='\'')
+		{
+			++ic;
+			if (start->at(ic)!='\''&&start->at(ic)!='\\')
+			{
+				ParseResultPtr r = graphic(start->from(ic));
+				if (start->at(ic+1)=='\'')
+					return make_shared<ParseResult>(start->from(ic+2), make_shared<HaskellCharAST>(r->getAST()->to_string()));
+				return ParseResultPtr();
+			}
+			if (start->at(ic)==' ' && start->at(ic+1)=='\'')
+				return make_shared<ParseResult>(start->from(ic+2), make_shared<HaskellCharAST>(start->at(ic)));
+			if (start->at(ic)=='\\' && start->at(ic+1)!='&') // the special ampersand has no role in Char.
+			{
+				ParseResultPtr r = escape(start->from(ic));
+				// r is true if it is an escape
+				// r->getAST is the escape data to return
+				// r->getState is the state after the escape.
+				if (r)
+				{
+					if (r->getState()->at(0)=='\'')
+					{
+						return make_shared<ParseResult>(r->getState()->from(1), make_shared<HaskellCharAST>(r->getAST()->to_string()));
+					}
+				}
+			}
+		}
+		return ParseResultPtr();
+	}
+};
+class HaskellStringAST : public AST
+{
+public:
+	HaskellStringAST(const std::string& name) : name(name) {}
+	std::string to_string() const {
+		string out = "\"";
+		for (auto pc=name.begin(); pc!=name.end(); ++pc)
+		{
+			out = AppendRepToString(*pc, out);
+		}
+		out += '"';
+		return out;
+	}
+private:
+	std::string name;
+};
+class String : public ParserBase
+{
+public:
+	String() : ParserBase("String") {}
+	ParseResultPtr parse(const ParseStatePtr& start)
+	{
+		extern bool showFails;
+		//size_t ic = 0;
+		ParseStatePtr t1 = start;
+		if (t1->at(0)=='"')
+		{
+			t1 = t1->from(1);
+			string content;
+			while (t1->at(0)!='"')
+			{
+				//cout << "String: watch your head: " << (char)t1->at(0) << " ("<<t1->at(0)<<")" << endl;
+				if (t1->at(0)!='"' && t1->at(0)!='\\')
+				{
+					//cout << "String: Graphic path" << endl;
+					ParseResultPtr r = graphic(t1->from(0));
+					if (r)
+					{
+						//cout << "String: adding " << r->getAST()->to_string() << "/" << endl;
+						content += r->getAST()->to_string();
+						t1 = r->getState();
+						continue;
+					}
+				}
+				if (t1->at(0)==' ') // not isspace(), just the one character.
+				{
+					content += ' ';
+					t1 = t1->from(1);
+				}
+				else if (t1->at(0)=='\\')
+				{
+					//cout << "String: got " << char(t1->at(0)) << endl;
+					if (isspace(t1->at(1)))
+					{
+						//cout << "String: assaying a gap." << endl;
+						size_t ic = 1;
+						while (isspace(t1->at(ic)))
+							++ic;
+						if (t1->at(ic)=='\\')
+						{
+							t1 = t1->from(ic+1);
+						}
+						else
+						{
+							if (showFails) std::cout << name << " failed [" << t1->substr(ic) << "] at " << __LINE__ << std::endl;
+							if (showFails) std::cout << "because gap didn't end with '\\' " << __LINE__ << std::endl;
+							return ParseResultPtr();
+						}
+					}
+					else
+					{
+						//cout << "String: let's see the escape " << endl;
+						ParseResultPtr r = escape(t1);
+						//if (r) cout << "String: got to " << char(r->getState()->at(0));
+						//if (r) cout << " and parsed " << r->getAST()->to_string();
+						//cout << endl;
+						//if (!r) cout << "String: escape failed at " << *t1->from(1) << endl;
+						if (r)
+						{
+							content += r->getAST()->to_string();
+							t1 = r->getState();
+						}
+						else
+						{
+							if (showFails) std::cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
+							if (showFails) std::cout << "because escape() didn't see something." << __LINE__ << std::endl;
+							return ParseResultPtr();
+						}
+					}
+				}
+			}
+			// The content is ready to go and hopefully t1->at(0) is a double-quote
+			if (t1->at(0) == '"')
+			{
+				return make_shared<ParseResult>(t1->from(1), make_shared<HaskellStringAST>(content));
+			}
+		}
+		if (showFails) std::cout << name << " failed";
+		extern bool showRemainder;
+		if (showRemainder) std::cout <<" [" << t1->substr(0) << "]";
+		if (showFails || showRemainder) std::cout << " at " << __LINE__ << std::endl;
+		return ParseResultPtr();
+	}
+};
 struct ReservedOp : public ParserBase
 {
 	ParseResultPtr parse(const ParseStatePtr& start)
@@ -145,7 +724,7 @@ struct VarSym : public ParserBase
 				//cout << "reservedop NOT VarSym [" << start->substr(0,ic) << ']' << endl;
 				return ParseResultPtr();
 			}
-			cout << "VarSym [" << start->substr(0,ic) << ']' << endl;
+			//cout << "VarSym [" << start->substr(0,ic) << ']' << endl;
 			return make_shared<ParseResult>(start->from(ic), std::make_shared<IdentifierAST>(start->substr(0, ic)));
 		}
 		return ParseResultPtr();
@@ -435,8 +1014,7 @@ void hs(string& input)
 	auto dotdot = make_shared<DotDot>();
 	auto varsym = make_shared<VarSym>();// varsym;
 	auto consym = make_shared<ConSym>();// consym;
-	auto hliteral = make_shared<NUM>() || make_shared<Quoted<'\''>>() || make_shared<Quoted<'"'>>();
-	hliteral->name = "hliteral";
+	auto hliteral = ChoicesName("hliteral") || make_shared<HaskellNumber>() || make_shared<String>() || make_shared<Char>();
 	auto varop = ChoicesName("varop") || varsym || (SequenceName("varIDop") && backTick && varID && backTick);
 	auto conop = ChoicesName("conop") || consym || (SequenceName("conIDop") && backTick && conID && backTick);
 
@@ -1081,10 +1659,13 @@ string layout(std::istream& file)
 	cout << "layout [\n" << input << "\n]"<< endl;
 	auto tp = make_shared<VarID>()
 			|| make_shared<ConID>()
+			|| make_shared<Comment>()
+			|| make_shared<NComment>()
 			|| make_shared<VarSym>()
 			|| make_shared<ConSym>()
-			|| make_shared<NUM>()
-			|| make_shared<Quoted<'"'>>()
+			|| make_shared<HaskellNumber>()
+			|| make_shared<String>()
+			|| make_shared<Char>()
 			|| make_shared<reservedWord>()
 			|| make_shared<reservedOperator>()
 			|| make_shared<specialChar>()
@@ -1095,7 +1676,8 @@ string layout(std::istream& file)
 	layoutTracker tracker;
 	while (start->at(0)!=0)
 	{
-		ParseResultPtr token = (*tp)(start);
+		ParseResultPtr token;
+		token = (*tp)(start);
 		if (!token)
 		{
 			cout << "No token" << endl;
@@ -1119,6 +1701,13 @@ string layout(std::istream& file)
 		string nxt = tracker.next();
 		if (nxt[0]==' '||nxt[0]=='\t'||nxt[0]=='\r'||nxt[0]=='\n')
 			results += '\n'+nxt;
+		else if (nxt.size()==0)
+		{
+			cout << "tracker returned empty string" << endl;
+			cout << "Current results:" << endl;
+			cout << results;
+			cout << "\n----------------" << endl;
+		}
 		else
 			results += nxt;
 	}
@@ -1126,15 +1715,52 @@ string layout(std::istream& file)
 }
 extern bool showFails;
 extern bool showRemainder;
+
+int optArgIndex = 1;
+
+int getopt(int argc, const char* argv[], const char* optstring)
+{
+	while (optArgIndex < argc)
+	{
+		if (argv[optArgIndex][0]=='-' && strchr(optstring, argv[optArgIndex][1]))
+		{
+			int r = argv[optArgIndex][1];
+			optArgIndex++;
+			return r;
+		}
+		else if (argv[optArgIndex][0]!='-')
+		{
+			return -1;
+		}
+		optArgIndex++;
+	}
+	return -1;
+}
 int main(int argc, const char* argv[]) {
 	cout << "PEGHS starts" << endl;
 	std::ifstream file;
-	if (argc > 1)
+	if (argc > 1) // if there are args, use getopt
 	{
-		file.open(argv[1]);
+		showFails = false;
+		showRemainder = false;
+		for (int opt = getopt(argc,argv, "fr"); opt != -1; opt=getopt(argc,argv,"fr"))
+		{
+			switch (opt)
+			{
+			case 'f':
+				showFails = true;
+				break;
+			case 'r':
+				showRemainder = true;
+				break;
+			}
+		}
+		cout << "optArgIndex " << optArgIndex << " opening " << argv[optArgIndex] << endl;
+		file.open(argv[optArgIndex]);
 		string laidout = layout(file);
 		cout << "laid out " << laidout << endl;
 		ParseState::reset();
+		//showFails = true;
 		hs(laidout);
 		return 0;
 	}
