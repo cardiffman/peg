@@ -3,118 +3,165 @@ peg
 
 Parsing Experiments on github
 
-So technically this thing was started when I hit a wall while writing a Haskell 
-parser.
+Or
 
-In general what we have here is 
+Parsing Expression Grammar
 
-* ParserBase -- anything that recognizes some text.
-* ParseState -- A state of parsing.
-* ParseResult -- A result of parsing
-* AST -- Abstract Syntax Tree node
+This project is mainly targetted to parsing Haskell programs. To do so it uses
+a parsing expression grammar. The grammar is written using variables which 
+represent either terminal or non-terminal symbols, combined into expressions
+that represent the derivation of further non-terminals including the start
+symbol. The operators in the expressions represent how the symbols combine to
+derive the non-terminal.
 
-In this code I use shared_ptr for all of the above except AST currently. So
-there are definitely leaks of AST's. The shared_ptr's have typedefs xxxPtr. This
-code makes use of make_shared from the Standard Library.
+In this project, rules create objects derived from `ParserBase`. These objects 
+should be held in `shared_ptr<ParserBase>` variables. Having such an object, to
+use it to parse, one creates a `shared_ptr<ParseState>` from a string and passes
+it to the `operator()` of the `ParserBase` object.
 
-The general pattern is that to get something parsed, there needs to be a
-derivative of ParserBase that recognizes it. And some of those classes are best
-generated via templates.
+Thus one combines the `ParserBase` objects using an expression that generates a 
+more complex `ParserBase` object which represents the non-terminal.
 
-Normally in a framework like this one goes down to the character level, and in
-this case the templates are there to enable that, such as recognizers of single 
-characters, strings in general, and special forms of strings that you might 
-normally have a tokenizer provide, such as the parsing done by the ID class or 
-the NUM class. Since I seriously am interested in parsing Haskell programs I 
-have some classes that are the initial attempts to recognize constructor names,
-variable names, and symbols, along with ways of distinguishing variable names or
-symbols from reserved words or symbols.
+The combinators, or means of combining the objects in this project are:
 
-A ParserBase-derived object implements:
-ParseResultPtr parse(const ParseStatePtr& start)
+* && -- The sequence operator
+* || -- The choice operator
+* `Rloop` -- A loop in which a pair of symbols alternates to make a list. One symbol, such as a comma, acts as the connector.
+* `Rloop2` -- A form of `Rloop` in which the connector is expected to appear at the end.
+* `Repeat0` -- Zero or more repetitions of one symbol
+* `Repeat` -- One or more repetitions of one symbol
+* `Optional` -- Zero or one appearances of one symbol
 
-The ParseResult has a ParseState that represents consumption of the recognized
-text and an AST that to some extent represents the consumed text. E.g. NUM's
-result includes an IntegerAST containing the number the text represented.
+The simplest built-in `ParserBase` object is `class tch<int>` which recognizes one 
+character whose value is that of the integer. Fixed sequences of characters can
+be recognized with `ttoken<const char match[]>`. So 
 
-So you could recognize the word bad by successively using parsers tch<'b'>,
-tch<'a'>, tch<'d'>. You could recognize bad0 by additionally recognizing 
-trange<'0','9'>. This of course suggests it would be interesting to have a
-convenient way to recognize a sequence of successful parses. 
+    auto space = make_shared<tch<' '>>(); // recognize one space
+    auto tab = make_shared<tch<'\t'>>(); // recognize one tab
+    auto whitespace = Repeat0(space || tab); // recognize an arbitrary sequence of spaces and tabs.
 
-One approach to recognizing sequences in the initial code is to select the
-sequence2<P1,P2> template. The parameter types are parser classes. There are
-several templates that recognize sequences including sequence3, sequence4 and
-sequence5, because the compiler I'm using doesn't do variadic class templates so
-well. There is also a set of sequence templates for sequences with white space
-which may be found between items in the sequence.
+The peg.h library in this project actually has a template Skipwhite<> that skips 
+whitespace and then invokes a parser of its argument's type, so a symbol can be
+recognized with white space coming before it. And explicit mention of whitespace
+is seldom necessary because all of the combinators except Repeat and Repeat0 skip
+whitespace.
 
-There are also functions called Repeat0, Repeat1, RLoop and RLoop2. These 
-return shared_ptr<>'s to parsers that recognize repetitions. Repeat0 
-corresponds to the * operator or Kleene star commonly used in parsing, Repeat1 
-corresponds to the + operator, RLoop corresponds to p (q p)* for two parsers p 
-and q, and RLoop2 corresponds to (p q)+. Repeat0 and Repeat1 do not account for 
-white space on their own. RLoop and RLoop2 actually do skip whitespace. So RLoop 
-actually does w* p (w* q w* p)* and RLoop2 does (w* p w* q)+ where w represents
-some white space.
+Parsers, whether by themselves or combined, return `ParseResult` objects, which 
+consist of an `AST` object and a `ParseState` object. The `ParseState` is just where 
+parsing should continue from now that the symbol has been recognized, and the 
+`AST` is some representation of the parsed symbol. The common AST types are 
+`CharAST` from the `tch` template, `StringAST` from the `ttoken` template, and 
+`WSequence` from the sequence operator && or the repetition combinators. The 
+`ParseState` object also implements a memoization system. The time performance of 
+PEG's can be poor without memoization. The `ParserBase` `operator()` which drives 
+parsing consults the `ParseResult` cache before parsing a given symbol at a given 
+position in the input and returns the previously-computed result if there is 
+one. 
 
-It's hard to have a grammar without having two ways to recognize one 
-non-terminal. In this code, the basic means for this is ordered choice. The 
-simplest embodyment of ordered choice is the choice2<P1,P2> template. A choice2
-parser invokes the P1 parser and if it succeeds, the result of P1 is the result
-of the choice2. Otherwise the result of the choice2 is the result, successful or
-otherwise of P2.
+In order to keep track of things either in a debugger or a log, it is handy to 
+be able to attach names to parsers. `ParserBase`'s constructor takes a name 
+parameter for this reason. Most of the built-in parsers either construct a name
+from their parameters or accept a name as a parameter. Also, the `ChoicesName` 
+function returns a `Choices` object with a name given to it, so that a 
+multiple-choice expression is built into that `Choices` object and is given that 
+name. Similarly SequenceName can be used to name sequences. This is easier to
+understand given an explanation of the sequence and choice operators. The 
+choice operator|| is overloaded to take two combinations of operand pairs. One
+overload takes two `ParserBase` objects and makes a `Choices` object containing
+references to the two `ParserBase` objects. The other takes a `Choices` object as 
+the left operand and a `ParserBase` as the right operand and returns the same 
+`Choices` object with another `ParserBase` appended to the `Choices`' `ParserBase`
+collection. The operator&& is overloaded similarly with `ParserBase` and 
+`WSequence` arguments. The W in the name `WSequence` represents that the sequence
+has implicit skipping of white space. The `Choices` object created by the 
+`ChoicesName` function has no parsers. If used as follows, it helps naturally
+apply names within expressions:
 
-In functional programming this idiom of functions returned by functions falls
-under the notion of combinators. When a parsing library is devised from 
-combinators it is referred to as a parser combinator library.
+	auto operand = ChoicesName("factor") || identifier || literal;
+	auto oper = ChoicesName("oper") || make_shared<tch<'+'>> || make_shared<tch<'*'>>;
+	auto expression = SequenceName("expression") && operand && Repeat0(oper && operand); 
 
-In the subject area of parsing, a grammar can be written in a language of 
-terminal symbols, non-terminal symbols, and operators symbolized with *, +, /, 
-?, &; and ! combined into expressions. This formalism is called Parsing 
-Expression Grammars which is the real reason this experiment is called Peg. In 
-the standard notation for PEG there is no operator that corresponds to 
-sequencing two parsers, they are just written in the expression in the order 
-they should be recognized in.
+Occasionally a non-terminal will refer to itself directly or indirectly in a
+way that cannot be factored out. The 'ParserReference' object can be used to
+close a loop that arises this way. One names a ParserReference variable after
+the symbol it shall represent, references it in the right-hand sides of the 
+expressions that need to refer to that symbol, and then writes the expression '
+that defines the symbol. Then one 'resolves' the reference.
 
-Occasionally a form of recursion crops up in a grammar that cannot be resolved
-by refactoring the grammar. The parser ParserReference is used in such a case.
-In use the ParserReference is constructed, and used as if it was the full 
-embodiment of its production. At some point an expression is written that does
-embody the production. At that time the ParserReference is resolved with the
-result of that expression. For example:
+	auto expressionRef = make_shared<ParserReference>();
+	auto operand = ChoicesName("factor") || identifier || literal 
+					|| (make_shared<tch<'('>>() && expressionRef && make_shared<tch<')'>>())
+					;
+	auto oper = ChoicesName("oper") || make_shared<tch<'+'>> || make_shared<tch<'*'>>;
+	auto expression = SequenceName("expression") && operand && Repeat0(oper && operand); 
+	expressionRef->resolve(expression);
 
-    auto expr = make_shared<ParserReference>();
-    auto op = Choice(plus,asterisk,slash,minus);
-    auto exprDef = Choice(WSequence(lparen,expr,rparen), RLoop(literal,op));
-    expr->resolve(exprDef);
-    
-This framework readily allows a grammar that says
+The AST objects generated by this generic framework can be printed out and 
+understood as a representation of the syntax tree of the input text, but leave 
+something to be desired in representing the potential semantics of the 
+constructs recognized. This deficiency can be remedied using the `ActionCaller` 
+parser and the `Action` combinator. The `Action` combinator takes a 
+transformation function and a parser and returns an `ActionCaller` parser which 
+will call the transformation function if the parser is successful. This stuff 
+is being used in a small way, mostly to log that certain constructs have been 
+recognized. Use of it can be made to generate specific AST objects from generic 
+ones, and to restructure the AST of a non-terminal based on semantics. For 
+example, a proper `ExpressionAST` could be generated from the `SequenceAST` 
+that the `expression` parser above would generate:
 
-    Choice(WSequence(nonterm1,nonterm2,nonterm3,nonterm4,nonterm5)
-         , WSequence(nonterm1,nonterm2,nonterm4,nonterm6,nonterm7)
-         )
+	class ExpressionAST : public AST { ... };
+	ASTPtr Expression(const ASTPtr& ast)
+	{
+		SequenceAST* sequence = dynamic_cast<SequenceAST*>(ast.get());
+		auto newAST = make_shared<ExpressionAST>();
+		// work on rearranging sequence into expression
+		return newAST;
+	}
+	...
+	auto expression = Action(Expression, 
+		SequenceName("expression") && operand && Repeat0(oper && operand));
+	...
 
-The Choice operator is supposed to try parsing the second choice if the first
-choice fails, backing up to its original starting point. The performance could
-easily be poor. This implementation, like most PEG implementations, assumes that
-parsers always return the same results when called from the same position in the
-input. Therefore a cache of previously achieved parse results is maintained. In
-lazy functional languages the built-in memoization gives this same optimization.
-In this implementation there is a map keyed by the parser ID and text position
-that gives the ParseResultPtr that was returned, if in fact there has been an 
-attempt to use the same parser at the same spot. This would not prevent left-
-recursion problems because if a nonterminal parser is left-recursing into itself
-it will not have returned its result yet. 
+A brief comparison with implementation possibilities in other libraries and 
+languages is in order. The Boost Spirit library aims at the same goal and on
+review appears to be more complete and to do more at compile time. The ParSec
+library for Haskell lets the recognizers be functions instead of objects and
+Haskell offers more flexibility in defining operators AND their precedence AND
+their associativity, possibly giving a cleaner notation. If one understands
+that the result of my operators and combinators is not the process of parsing
+but the specification of how the process will be done, then one begins to see
+that this is possible in languages even less advanced than C++. For example in
+C the terminals could be recognized with individually-written functions, a few
+struct's could be developed that specified how to use combinations of parsers
+and the templates and operator overloads are not strictly necessary.
 
-The original committed state of peg.cpp represents a mixture of stages of 
-evolution in the implementation of PEG and parser combinators in C++. The 
-templates sequence2, wsequence2, and choice2 and their bretheren were my initial 
-work. The next stage used the functions Sequence, WSequence, and Choice due to 
-C++'s property of more readily implementing variadic templates for functions than 
-for classes. The latest stage is the operators "&&" and "||" for sequence and 
-choice. The implementation of these operators is based on the classes WSequenceN 
-and Choices which are not generated by templates, but instead rely on the fact 
-that all parsers in this work are derived from ParserBase.
+The Haskell-specific code in peghs.cpp contains objects for recognizing the
+lexemes of Haskell, including its very specific versions of literals and 
+comments. These are used in a first layout pass to determine where to insert 
+semicolons and curly braces, and then in a second pass to recognize the 
+program. The reference syntax of Chapter 10 of the Haskell 2010 report has been
+more-or-less faithfully translated into the PEG framework above, in a series of 
+expressions spanning roughly 400 lines, supported by Haskell-specific parsers 
+for Haskell lexemes spanning an additional 1000 lines. The resulting parser has 
+been tested and found to recognize a small number of Haskell programs. It may 
+well recognize even more, but it is too early to make extravagant claims. 
 
-This code has been compiled with VS Express 2010.
+I don't think GHC uses a PEG to parse Haskell. A [report](http://www.dmst.aueb.gr/dds/pubs/jrnl/1993-StrProg-Haskell/html/exp.html)
+from the early 90's on
+a Haskell implementation project done for a master's degree used a custom lexer
+driving a layout layer into a yacc parser and barely managed (as I would 
+describe it) to parse Haskell in that LALR(1) framework. I wrote part of a parser in C++ in recursive descent
+and the syntax part was looking very tedious. It did recognize a couple of 
+Haskell fragments that did not originate with me, but there were a lot of 
+productions left to do and some of them didn't look amenable to classic 
+recursive descent. 
+
+Why write a Haskell implementation? Why did Frege write Begriffsschrift? I've
+done two Scheme implementations, the compiler somewhat less complete than the
+interpreter that the compiler ran on. I am ultimately interested in much more 
+dynamic programs than compilers. The programs I am interested in are usually 
+considered far too dynamic and demanding to be implemented in languages other 
+than C or C++, but I want to explore the space at its frontier instead of its 
+cozy interior.
+
+This code has been compiled with VS Express 2010 and with GCC 4.5.3.
