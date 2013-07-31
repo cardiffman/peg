@@ -12,6 +12,7 @@
 #include <vector>
 #include <list>
 #include <stack>
+#include <sstream>
 
 #ifdef _MSC_VER
 #define __PRETTY_FUNCTION__ __FUNCTIONW__
@@ -915,7 +916,31 @@ typedef ttoken<patFromStr> PatFrom;
 class DeclAST : public AST
 {
 public:
-	string to_string() const;
+	DeclAST(const ASTPtr& lhs, const ASTPtr& rhs)
+: lhs(lhs), rhs(rhs)
+{
+}
+	string to_string() const
+	{
+		return "Decl " + lhs->to_string() + " " + rhs->to_string();
+	}
+	ASTPtr lhs;
+	ASTPtr rhs;
+};
+class DeclTypeAST : public AST
+{
+public:
+	DeclTypeAST(const ASTPtr& lhs, const ASTPtr& sign, const ASTPtr& rhs)
+: lhs(lhs), sign(sign), rhs(rhs)
+{
+}
+	string to_string() const
+	{
+		return "DeclT " + lhs->to_string() + sign->to_string() + rhs->to_string();
+	}
+	ASTPtr lhs;
+	ASTPtr sign;
+	ASTPtr rhs;
 };
 ASTPtr Decl(const ASTPtr& ast)
 {
@@ -925,7 +950,20 @@ ASTPtr Decl(const ASTPtr& ast)
 	{
 		cout << "Decl 0: " << sequence->at(0)->to_string() << endl;
 		if (sequence->size()>1)
-		cout << "Decl 1: " << sequence->at(1)->to_string() << endl;
+		{
+			if (sequence->at(1)->to_string()=="::" && sequence->size()==3)
+			{
+				cout << "Decl 1: " << sequence->at(1)->to_string() << endl;
+				cout << "Decl 2: " << sequence->at(2)->to_string() << endl;
+				return make_shared<DeclTypeAST>(sequence->at(0), sequence->at(1), sequence->at(2));
+			}
+			if (sequence->size()==2)
+			{
+				cout << "Decl 1: " << sequence->at(1)->to_string() << endl;
+				return make_shared<DeclAST>(sequence->at(0), sequence->at(1));
+			}
+		}
+		cout << "Decl not sure" << endl;
 	}
 	else
 	{
@@ -933,6 +971,21 @@ ASTPtr Decl(const ASTPtr& ast)
 	}
 	return ast;
 }
+class LetAST : public AST
+{
+public:
+	LetAST(const ASTPtr& id, const ASTPtr& def)
+: id(id), def(def)
+{
+
+}
+	string to_string() const
+	{
+		return "Let "+id->to_string()+"="+def->to_string();
+	}
+	ASTPtr id;
+	ASTPtr def;
+};
 ASTPtr LetClause(const ASTPtr& ast)
 {
 	cout << __PRETTY_FUNCTION__ << endl;
@@ -941,7 +994,10 @@ ASTPtr LetClause(const ASTPtr& ast)
 	{
 		cout << "Let 0: " << sequence->at(0)->to_string() << endl;
 		if (sequence->size()>1)
-		cout << "Let 1: " << sequence->at(1)->to_string() << endl;
+		{
+			cout << "Let 1: " << sequence->at(1)->to_string() << endl;
+			return make_shared<LetAST>(sequence->at(0), sequence->at(1));
+		}
 	}
 	else
 	{
@@ -949,11 +1005,114 @@ ASTPtr LetClause(const ASTPtr& ast)
 	}
 	return ast;
 }
+class PatAST : public AST
+{
+public:
+	explicit PatAST(const ASTPtr& ast)
+	{
+		SequenceAST* sequence = dynamic_cast<SequenceAST*>(ast.get());
+		if (sequence)
+		{
+			for (size_t i=0; i<sequence->size(); ++i)
+			{
+				auto element = sequence->at(i);
+				SequenceAST* inner = dynamic_cast<SequenceAST*>(element.get());
+				while (inner != 0 && inner->size()==1)
+				{
+					element = inner->at(0);
+					inner = dynamic_cast<SequenceAST*>(element.get());
+				}
+				pattern.push_back(element);
+			}
+		}
+		else
+			pattern.push_back(ast);
+	}
+	string to_string() const
+	{
+		std::ostringstream r;
+		if (pattern.size()==1)
+			return pattern[0]->to_string();
+		r << "Pattern " << pattern[0]->to_string();
+		for (size_t i=1; i<pattern.size(); ++i)
+		{
+			r << " " << pattern[i]->to_string();
+		}
+		return r.str();
+	}
+	std::vector<ASTPtr> pattern;
+};
 ASTPtr Pat(const ASTPtr& ast)
 {
-	cout << __PRETTY_FUNCTION__ << endl;
-	cout << "Pattern: " << ast->to_string() << endl;
+	return make_shared<PatAST>(ast);
+}
+ASTPtr APat(const ASTPtr& ast)
+{
+	cout << __FUNCTION__ << ": " << ast->to_string() << endl;
 	return ast;
+}
+ASTPtr LPat(const ASTPtr& ast)
+{
+	cout << __FUNCTION__ << ": " << ast->to_string() << endl;
+	return ast;
+}
+ASTPtr LPat2(const ASTPtr& ast)
+{
+	cout << __FUNCTION__ << ": " << ast->to_string() << endl;
+	return ast;
+}
+ASTPtr LPat3(const ASTPtr& ast)
+{
+	cout << __FUNCTION__ << ": " << ast->to_string() << endl;
+	return ast;
+}
+ASTPtr Lexp(const ASTPtr& ast)
+{
+	cout << __PRETTY_FUNCTION__ << endl;
+	cout << "Lexp: " << ast->to_string() << endl;
+	return ast;
+}
+class InfixexpAST : public AST
+{
+public:
+	explicit InfixexpAST(const ASTPtr& ast)
+	{
+		SequenceAST* sequence = dynamic_cast<SequenceAST*>(ast.get());
+		if (sequence)
+		{
+			for (size_t i=0; i<sequence->size(); ++i)
+			{
+				auto element = sequence->at(i);
+				SequenceAST* inner = dynamic_cast<SequenceAST*>(element.get());
+				while (inner != 0 && inner->size()==1)
+				{
+					element = inner->at(0);
+					inner = dynamic_cast<SequenceAST*>(element.get());
+				}
+				expression.push_back(element);
+			}
+		}
+		else
+			expression.push_back(ast);
+	}
+	string to_string() const
+	{
+		std::ostringstream r;
+		if (expression.size()==1)
+			return expression[0]->to_string();
+		r << "Infixexp " << expression[0]->to_string();
+		for (size_t i=1; i<expression.size(); ++i)
+		{
+			r << " " << expression[i]->to_string();
+		}
+		//r << "\n";
+		return r.str();
+	}
+	std::vector<ASTPtr> expression;
+};
+ASTPtr Infixexp(const ASTPtr& ast)
+{
+	return make_shared<InfixexpAST>(ast);
 }
 void hs(string& input)
 {
@@ -1027,14 +1186,14 @@ void hs(string& input)
 	auto qconid = SequenceName("qvarid") && modQual && conID;
 	auto qvarsym = SequenceName("qvarsym") && modQual && varsym;
 	auto qvarop = ChoicesName("qvarop") || qvarsym || (SequenceName("qvarIDop") && backTick && qvarid && backTick);
-	auto qconop = ChoicesName("qconop") || qconsym || (SequenceName("qconIDop") && backTick && qconid && backTick);
+	auto gconsym = ChoicesName("gconsym") || colon || qconsym;
+	auto qconop = ChoicesName("qconop") || gconsym || (SequenceName("qconIDop") && backTick && qconid && backTick);
 	auto qop = ChoicesName("qop")|| qvarop || qconop;
 	auto unit = (SequenceName("unit") && lparen && rparen);
 	auto elist = (SequenceName("[]") && lbracket && rbracket);
 	auto etuple = (SequenceName("etuple") && lparen && Repeat1(",",comma) && rparen);
 	auto efn = (SequenceName("efn") && lparen && fnTo && rparen);
 	auto qvar = ChoicesName("qvar") || qvarid || (SequenceName("(qvarsym)") && lparen && qvarsym && rparen);
-	auto gconsym = ChoicesName("gconsym") || colon || qconsym;
 	auto qcon = ChoicesName("qcon") || conID || (SequenceName("(gconsym)") && lparen && gconsym &&rparen);
 	auto gcon = ChoicesName("gcon") || unit || elist || etuple || qcon;
 
@@ -1086,11 +1245,15 @@ void hs(string& input)
 							||(SequenceName("do") && doKw && lbrace && stmts && rbrace))
 						||fexpRef
 						;
-	auto infixexp = ChoicesName("infixexp")
+#if 1
+	auto infixexp = Action(Infixexp, RLoop("infixexp", SequenceName("[-]lexp")&& Optional(minus) && lexp, qop));
+#else
+	auto infixexp = Action(Infixexp, ChoicesName("infixexp")
 						|| (SequenceName("lexp,qop,infixexp") && lexp && qop && infixexpRef)
 						|| (SequenceName("-infixexp") && minus && infixexpRef)
 						|| lexp
-						;
+						);
+#endif
 	auto typeRef = make_shared<ParserReference>();
 	auto atypeRef = make_shared<ParserReference>();
 	auto klass = ChoicesName("klass")
@@ -1101,17 +1264,28 @@ void hs(string& input)
 						|| klass
 						|| (SequenceName("(klass ,klass*)") && lparen && RLoop("klassComma",klass,comma) && rparen)
 						;
+	auto contextFlag = SequenceName("contextFlag") && context && contextTo;
+#if 1
+	auto exp = ChoicesName("exp")
+					|| (SequenceName("expwtypesig") && infixexp && colonColon
+							//&& Optional(SequenceName("contextFlag") && context && contextTo)
+							&& Optional(contextFlag)
+							&& typeRef)
+					|| infixexp
+					;
+#else
 	auto exp = SequenceName("exp")
 			&& infixexp
 			&& Optional(SequenceName("typesig")
 					&& colonColon
 					&& Optional(SequenceName("context") && context && contextTo)
 					&& typeRef) ;
+#endif
 	infixexpRef->resolve(infixexp);
 	expRef->resolve(exp);
 
 
-	auto rhs = (SequenceName("rhs") && equals && exp);
+	auto rhs = (SequenceName("rhs") && equals && exp && Optional(wheres));
 	auto gtycon = ChoicesName("gtycon") || qtycon || unit || elist || efn || etuple;
 	auto var = ChoicesName("var")
 						|| varID 
@@ -1147,45 +1321,55 @@ void hs(string& input)
 	auto op = ChoicesName("op") || varop || conop;
 	auto ops = Repeat1("ops",SkipWhite(op));
 	auto gendecl = ChoicesName("gendecl")
-					|| (SequenceName("vars::type") && vars && Optional(context && contextTo) && colonColon && type)
+					|| (SequenceName("vars::type") && vars && Optional(contextFlag) && colonColon && type)
 					|| (SequenceName("opfixity") && fixity && Optional(make_shared<NUM>()) && ops)
 					;
 	auto apatRef = make_shared<ParserReference>();
 	auto fpat = (SequenceName("fpat") && varID && equals && patRef);
 	auto patternComma = RLoop("patternComma",patRef,comma);
 	auto patterns = ChoicesName("patterns")
-						|| (SequenceName("(pat)") && lparen && patRef && rparen)
 						|| (SequenceName("(pat,pat)") && lparen && patternComma && rparen)
+						|| (SequenceName("(pat)") && lparen && patRef && rparen)
 						|| (SequenceName("[pat,pat]") && lbracket && patternComma && rbracket)
 						|| (SequenceName("~apat") && tilde && apatRef)
 						;
-	auto apat = ChoicesName("apat")
+	auto apat = Action(APat, ChoicesName("apat")
 						|| (SequenceName("var@apat") && var && Optional((SequenceName("@apat") && atSign && apatRef)))
 						|| gcon
 						|| (SequenceName("qcon{fpat,fpat}") && qcon && lbrace && Optional(RLoop("fpat,",fpat,comma)) && rbrace)
+						|| hliteral
 						|| wildcard
-						|| patterns
-						;
+						//|| patterns
+						|| (SequenceName("(pat,pat)") && lparen && patternComma && rparen)
+						|| (SequenceName("(pat)") && lparen && patRef && rparen)
+						|| (SequenceName("[pat,pat]") && lbracket && patternComma && rbracket)
+						|| (SequenceName("~apat") && tilde && apatRef)
+						);
 	apatRef->resolve(apat);
 	auto funlhsRef = make_shared<ParserReference>();// funlhsRef;
 	auto funlhs = ChoicesName("funlhs")
 						|| (SequenceName("var apat+") && var && Repeat1("apat+",SkipWhite(apat)))
 						|| (SequenceName("pat,varop,pat") && patRef && varop && patRef)
-						|| (SequenceName("(funlhs)apat+") && (lparen && funlhsRef) && rparen && Repeat1("apat+",SkipWhite(apat)))
+						|| (SequenceName("(funlhs)apat+") && (SequenceName("(funlhs")&& lparen && funlhsRef) && rparen && Repeat1("apat+",SkipWhite(apat)))
 						;
 	cout << "funlhs examination " << funlhs->name << " id " << funlhs->parser_id << " has " << funlhs->choices.size() << " parsers " << endl;
 	for (size_t c =0; c<funlhs->choices.size(); ++c)
 		cout << "funlhs examination " << funlhs->name << " id " << funlhs->parser_id << " parser["<<c<<"] "
 				<< funlhs->choices[c]->name << endl;
 	funlhsRef->resolve(funlhs);
-	auto lpat = ChoicesName("lpat")
+	auto lpat = Action(LPat, ChoicesName("lpat")
+						||Action(LPat3, SequenceName("gcon apat+") && gcon && Repeat1("apat+",SkipWhite(apat)))
 						||apat
-						||(SequenceName("gcon apat+") && gcon && Repeat1("apat+",SkipWhite(apat)))
-						;
+						||Action(LPat2, SequenceName("-(integer|float)") && minus && make_shared<HaskellNumber>())
+						);
+#if 1
+	auto pat = Action(Pat, RLoop("pat", lpat, qconop));
+#else
 	auto pat = make_shared<ActionCaller>(Pat, ChoicesName("pat")
 						||(SequenceName("lpat,qconop,pat") && lpat && qconop && patRef)
 						||lpat
 						);
+#endif
 	patRef->resolve(pat);
 	auto decl = make_shared<ActionCaller>(Decl, ChoicesName("decl")
 						||gendecl
@@ -1203,10 +1387,10 @@ void hs(string& input)
 				|| qvar
 				|| gcon
 				|| hliteral
-				|| (SequenceName("(exp)") && lparen && expRef && rparen)
 				|| (SequenceName("(exp,exp)") && lparen && expRefComma && rparen)
-				|| (SequenceName("[exp,exp]") && lbracket && expRefComma && rbracket)
+				|| (SequenceName("(exp)") && lparen && expRef && rparen)
 				||(SequenceName("[exp,exp..exp]") && lbracket && expRef && Optional((SequenceName(",exp") && comma && expRef)) && dotdot && expRef && rbracket)
+				|| (SequenceName("[exp,exp]") && lbracket && expRefComma && rbracket)
 				||(SequenceName("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop("qual,",qual,comma) && rbracket)
 				||(SequenceName("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
 				||(SequenceName("(qop<-> infixexp)") && lparen &&isntminus && qop && infixexpRef && rparen)
@@ -1221,7 +1405,7 @@ void hs(string& input)
 				// probably something like
 				// auto aexp = (my entire current expression except last choice) && Optional(lbrace && fbind+ && rbrace)
 				//  with a little isntqcon action thrown in.
-				//  but for now I want to debug let forms.
+				//  but for now I want to debug just about anything else.
 				;
 	aexpRef->resolve(aexp);
 	//auto fexp = WSequence(Optional(fexpRef),aexp);
@@ -1245,6 +1429,7 @@ void hs(string& input)
 						|| simpleclass
 						|| SequenceName("(simpleclass,)")&& lparen && RLoop("simpleclass,", simpleclass, comma) && rparen
 						;
+	auto scontextFlag = SequenceName("scontextFlag") && scontext && contextTo;
 	auto funlhsvar = ChoicesName("funlhsvar") || funlhs || var;
 	auto cdecl_  = ChoicesName("cdecl")
 						|| gendecl
@@ -1282,10 +1467,10 @@ void hs(string& input)
 						;
 	auto topdecl = ChoicesName("topdecl")
 						|| SequenceName("type") && typeKw && simpletype && equals && type
-						|| SequenceName("data") && dataKw && Optional(context && contextTo) && simpletype && Optional(equals && constrs) && Optional(derivingKw)
-						|| SequenceName("newtype") && newtypeKw && Optional(context && contextTo) && simpletype && equals && newconstr && Optional(derivingKw)
-						|| SequenceName("class") && classKw && Optional(scontext && contextTo) && tycls && tyvar && Optional(whereKw && cdecls)
-						|| SequenceName("instance") && instanceKw && Optional(scontext && contextTo) && qtycls && inst && Optional(whereKw && idecls)
+						|| SequenceName("data") && dataKw && Optional(contextFlag) && simpletype && Optional(equals && constrs) && Optional(derivingKw)
+						|| SequenceName("newtype") && newtypeKw && Optional(contextFlag) && simpletype && equals && newconstr && Optional(derivingKw)
+						|| SequenceName("class") && classKw && Optional(scontextFlag) && tycls && tyvar && Optional(whereKw && cdecls)
+						|| SequenceName("instance") && instanceKw && Optional(scontextFlag) && qtycls && inst && Optional(whereKw && idecls)
 						|| SequenceName("default") && defaultKw && lparen && RLoop("type,",type,comma) && rparen
 						|| SequenceName("foreign") && foreignKw && fdecl
 						|| decl
@@ -1403,7 +1588,6 @@ public:
 	,blanksOnly(true)
 	,moduleStart(true)
 	,kwNeedsBrace(false)
-	,yield(' ')
 	{}
 	int column;
 	int line;
@@ -1412,16 +1596,35 @@ public:
 	bool blanksOnly;
 	bool moduleStart;
 	bool kwNeedsBrace;
-	int yield;
 	struct LayoutToken
 	{
 		enum Type { Brace, Angle, Text, Space };
 		Type type;
 		string text;
 		int column;
+		string to_string() const {
+			std::ostringstream out;
+			switch (type)
+			{
+			case Text:
+				out << "n " << column << ' ' << text.substr(0,3);
+				break;
+			case Brace:
+				out << "n {" << column << "}";
+				break;
+			case Angle:
+				out << "n <" << column << ">";
+				break;
+			case Space:
+				out << "n " << column << ' ' << text.size() << " ws chrs";
+				break;
+			}
+			return out.str();
+		}
 	};
 	std::list<LayoutToken> pendingInput;
 	std::stack<int> indents;
+	std::stack<int> lparens;
 	void post(const string& token)
 	{
 		if (token[0]!=' ' && token[0]!='\t' && token[0]!='\r' && token[0] != '\n')
@@ -1434,7 +1637,7 @@ public:
 				pendingInput.push_back(lt);
 				kwNeedsBrace = false;
 			}
-			if (token=="let" || token=="where" || token=="do"||token=="of")
+			else if (token=="let" || token=="where" || token=="do"||token=="of")
 			{
 				kwNeedsBrace=true;
 				if (blanksOnly)
@@ -1479,9 +1682,11 @@ public:
 			lt.column = column;
 			lt.text = token;
 			pendingInput.push_back(lt);
+			//cout << token << " pushed" << endl;
 			blanksOnly = false;
 			lastFirstBlank = column;
 			column += token.size();
+			moduleStart = false;
 		}
 		else
 		{
@@ -1529,19 +1734,31 @@ public:
 		if (pendingInput.size()>0 && pendingInput.front().type == LayoutToken::Angle)
 		{
 			int n = pendingInput.front().column;
-			int m = indents.top();
-			//cout << "Official handling of <" << n << "> vs indent m "<< m << endl;
-			if (n==m)
+			if (indents.size())
 			{
+				int m = indents.top();
+				//cout << "Official handling of <" << n << "> vs indent m "<< m << endl;
+				if (n==m)
+				{
+					pendingInput.pop_front();
+					//cout << "Returning ;" << endl;
+					return ";";
+				}
+				if (n<m)
+				{
+					indents.pop();
+					//cout << "Returning }" << endl;
+					return "}";
+				}
+				//cout << "Official handling of <" << n << "> greater than indent m "<< m << " returning '' " << endl;
 				pendingInput.pop_front();
-				//cout << "Returning ;" << endl;
-				return ";";
+				return "";
 			}
-			if (n<m)
+			else
 			{
-				indents.pop();
-				//cout << "Returning }" << endl;
-				return "}";
+				//cout << "Official handling of <" << n << "> vs indent nil" <<endl;
+				pendingInput.pop_front();
+				return "";//return next();
 			}
 		}
 		if (pendingInput.size()>0 && pendingInput.front().type==LayoutToken::Brace)
@@ -1549,6 +1766,7 @@ public:
 			int n = pendingInput.front().column;
 			int m = -1;
 			if (indents.size()) m = indents.top();
+			//cout << "Official handling of {" << n << "} vs indent m "<< m << endl;
 			if (n > m)
 			{
 				pendingInput.pop_front();
@@ -1569,13 +1787,17 @@ public:
 		}
 		if (pendingInput.size()>0 && pendingInput.front().type==LayoutToken::Text)
 		{
-			int m = indents.top();
-			if (pendingInput.front().text=="}" && m==0)
+			if (indents.size())
 			{
-				indents.pop();
-				pendingInput.pop_front();
-				//cout << "Returning }" << endl;
-				return "}";
+				int m = indents.top();
+				if (pendingInput.front().text=="}" && m==0)
+				{
+					//  L (} : ts) (0 : ms)	=}  :  (L ts ms)
+					indents.pop();
+					pendingInput.pop_front();
+					//cout << "Returning }" << endl;
+					return "}";
+				}
 			}
 			if (pendingInput.front().text=="}")
 			{
@@ -1585,8 +1807,38 @@ public:
 			{
 				indents.push(0);
 				pendingInput.pop_front();
-				//cout << "Returning {" << endl;
+				cout << "Returning { at line " << __LINE__ << endl;
 				return "{";
+			}
+			if (pendingInput.front().text=="(")
+			{
+				lparens.push(pendingInput.front().column);
+			}
+			if (pendingInput.front().text==")")
+			{
+				if (!indents.empty() && indents.top() > 0)
+				{
+					//cout << " )paren with indents: ";
+					//for (auto pi=pendingInput.begin(); pi!=pendingInput.end(); ++pi)
+					//	cout << pi->to_string() << ' ';
+					//cout << endl;
+					//cout << " paren with m("<<indents.top()<<") > 0 and lparen " << lparens.top() << endl;
+					if (indents.top() > lparens.top())
+					{
+						indents.pop();
+						//cout << "Returning } at line " << __LINE__ << endl;
+						return "}";
+					}
+					if (lparens.size()) lparens.pop();
+					pendingInput.pop_front();
+					return ")";
+				}
+				else
+				{
+					if (lparens.size()) lparens.pop();
+					pendingInput.pop_front();
+					return ")";
+				}
 			}
 			// There's also the parse error case but I'm not parsing
 			string r = pendingInput.front().text;
@@ -1621,16 +1873,7 @@ public:
 	{
 		if (pendingInput.size())
 		{
-			cout << " n ";
-			if (pendingInput.front().type==LayoutToken::Angle)
-				cout << "<" << pendingInput.front().column << ">";
-			else if (pendingInput.front().type == LayoutToken::Brace)
-				cout << "{" << pendingInput.front().column << "}";
-			else if (pendingInput.front().type == LayoutToken::Text)
-				cout << pendingInput.front().column << ' ' << pendingInput.front().text.substr(0,3);
-			else
-				cout << pendingInput.front().column << ' ' << pendingInput.front().text.size() << " ws chrs";
-			cout << " ";
+			cout << pendingInput.front().to_string() << " ";
 		}
 		else
 		{
@@ -1690,8 +1933,9 @@ string layout(std::istream& file)
 		}
 		tracker.post(token->getAST()->to_string());
 		string yield = tracker.next();
-		if (yield != "")
-			results += yield;
+		while (yield == "")
+			yield = tracker.next();
+		results += yield;
 		start = token->getState();
 		if (start->at(0)==0)
 			cout << "Nothing left" << endl;
@@ -1700,7 +1944,20 @@ string layout(std::istream& file)
 	{
 		string nxt = tracker.next();
 		if (nxt[0]==' '||nxt[0]=='\t'||nxt[0]=='\r'||nxt[0]=='\n')
-			results += '\n'+nxt;
+		{
+			cout << " Here's a messer upper" << endl;
+			bool hasCr = false;
+			for (auto p = nxt.begin(); p!=nxt.end(); ++p)
+			{
+				hasCr |= ((*p == '\r') | (*p == ' '));
+				cout << (int)(*p) << ' ';
+			}
+			cout << endl;
+			if (hasCr)
+				results += '\n'+nxt;
+			else
+				results += nxt;
+		}
 		else if (nxt.size()==0)
 		{
 			cout << "tracker returned empty string" << endl;
