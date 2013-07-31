@@ -18,13 +18,13 @@ template <const char match[]> struct ttoken : public ParserBase
 	ttoken() : ParserBase(match) {}
 	ParseResultPtr parse(const ParseStatePtr& start)
 	{
-		extern bool showRemainder;
+		//extern bool showRemainder;
 		size_t ml = strlen(match);
 		if (start->length() >= ml)
 		{
 			if (start->substr(0, ml) == match)
 			{
-				if (showRemainder) std::cout << "ttoken "<< match << " matched " << start->substr(0) << std::endl;
+				//if (showRemainder) std::cout << "ttoken "<< match << " matched " << start->substr(0) << std::endl;
 				return std::make_shared<ParseResult>(start->from(ml), std::make_shared<StringAST>(match));
 			}
 		}
@@ -255,7 +255,14 @@ struct rLoop : public ParserBase
 		ParseResultPtr r = skipwhite(t1, item);
 		if (!r)
 		{
-			if (showFails) std::cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
+			if (showFails)
+			{
+				std::cout << name<< " failed";
+				if (showRemainder) std::cout <<" [" << start->substr(0) << "]";
+				std::cout << " because " << item->name << " failed";
+				std::cout << " at " << __LINE__ << std::endl;
+			}
+			//if (showFails) std::cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
 			return r;
 		}
 		std::shared_ptr<SequenceAST> ast = std::make_shared<SequenceAST>();
@@ -276,12 +283,19 @@ struct rLoop : public ParserBase
 					r = r->getNewResult(firstAST);
 				else
 					r = r->getNewResult(ast);
-				if (showRemainder) std::cout << name << ' ' << '[' << r->getState()->substr(0) <<"] " << __LINE__ << std::endl;
+				//if (showRemainder) std::cout << name << ' ' << '[' << r->getState()->substr(0) <<"] " << __LINE__ << std::endl;
 				return r;
 			}
 			if (!joinResult && endsWithJoin)
 			{
-				if (showFails) std::cout << name << " failed  [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
+				if (showFails)
+				{
+					std::cout << name<< " failed";
+					if (showRemainder) std::cout <<" [" << start->substr(0) << "]";
+					std::cout << " because " << join->name << " failed";
+					std::cout << " at " << __LINE__ << std::endl;
+				}
+				//if (showFails) std::cout << name << " failed  [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
 				return r; // This means something like "a, a, a " happened which is not okay.
 			}
 			r = joinResult;
@@ -295,7 +309,14 @@ struct rLoop : public ParserBase
 			r = skipwhite(t1, item);
 			if (!r && !endsWithJoin)
 			{
-				if (showFails) std::cout << name << " failed  [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
+				if (showFails)
+				{
+					std::cout << name<< " failed";
+					if (showRemainder) std::cout <<" [" << start->substr(0) << "]";
+					std::cout << " because " << item->name << " failed";
+					std::cout << " at " << __LINE__ << std::endl;
+				}
+				//if (showFails) std::cout << name << " failed  [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
 				return r; // This means something like "a, a, a, " happened which is not okay.
 			}
 			if (!r && endsWithJoin)
@@ -303,7 +324,7 @@ struct rLoop : public ParserBase
 				// Item parse failed, so last success was join.
 				// This means something like "a, a, a, " happened which is okay.
 				// The ast is complete and already stored in joinResult which is what we return.
-				if (showRemainder) std::cout << name << ' ' << '[' << joinResult->getState()->substr(0) << "] " << __LINE__ << std::endl;
+				//if (showRemainder) std::cout << name << ' ' << '[' << joinResult->getState()->substr(0) << "] " << __LINE__ << std::endl;
 				return std::make_shared<ParseResult>(joinResult->getState(), ast);
 			}
 		}

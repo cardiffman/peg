@@ -135,8 +135,13 @@ ParseResultPtr WSequenceN::parse(const ParseStatePtr& start)
 		r = skipwhite(t1,parser);
 		if (!r)
 		{
-			if (showFails) std::cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
-			if (showFails) std::cout << " because [" << parser->name << "] failed." << std::endl;
+			if (showFails)
+			{
+				cout << name << " failed";
+				if (showRemainder) cout << " [" << t1->substr(0) << "]";
+				cout << " because [" << parser->name << "] failed.";
+				cout << " at " << __LINE__ << endl;
+			}
 			return r;
 		}
 		if (!ast)
@@ -146,7 +151,7 @@ ParseResultPtr WSequenceN::parse(const ParseStatePtr& start)
 		++i;
 	}
 	r = r->getNewResult(ast);
-	if (showRemainder) std::cout << name <<' ' << sequence << " [" << r->getState()->substr(0) << "]" << std::endl;
+	//if (showRemainder) std::cout << name <<' ' << sequence << " [" << r->getState()->substr(0) << "]" << std::endl;
 	return r;
 }
 
@@ -165,11 +170,16 @@ ParseResultPtr Choices::parse(const ParseStatePtr& start)
 	}
 	if (!r)
 	{
-		if (showFails) std::cout << name << " failed [" << t1->substr(0) << "] at " << __LINE__ << std::endl;
-		if (showFails) std::cout << " because " << names << " all failed " << std::endl;
+		if (showFails)
+		{
+			std::cout << name << " failed";
+			if (showRemainder) cout << " [" << t1->substr(0) << "]";
+			std::cout << " because " << names << " all failed ";
+			cout << " at " << __LINE__ << std::endl;
+		}
 		return r;
 	}
-	if (showRemainder) std::cout << name << " ["<< r->getState()->substr(0) <<"]" << std::endl;
+	//if (showRemainder) std::cout << name << " ["<< r->getState()->substr(0) <<"]" << std::endl;
 	return r;
 }
 
@@ -180,7 +190,13 @@ ParseResultPtr repeat1::parse(const ParseStatePtr& start)
 	ParseResultPtr rep = (*next)(start);
 	if (!rep)
 	{
-		if (showFails) std::cout << name<< " failed [" << start->substr(0) << "] at " << __LINE__ << std::endl;
+		if (showFails)
+		{
+			cout << name<< " failed";
+			if (showRemainder) cout <<" [" << start->substr(0) << "]";
+			cout << " because " << next->name << " failed";
+			cout << " at " << __LINE__ << std::endl;
+		}
 		return rep;
 	}
 	//ast->append(rep->getAST());
@@ -197,7 +213,7 @@ ParseResultPtr repeat1::parse(const ParseStatePtr& start)
 		rep = rep2;
 		rep2 = (*next)(rep2->getState());
 	}
-	if (showRemainder) std::cout << name<< " [" << rep->getState()->substr(0) << "]"<< std::endl;
+	//if (showRemainder) std::cout << name<< " [" << rep->getState()->substr(0) << "]"<< std::endl;
 	if (!ast)
 		return rep->getNewResult(firstAST);
 	return rep->getNewResult(ast);
@@ -222,7 +238,7 @@ ParseResultPtr repeat0::parse(const ParseStatePtr& start)
 		rep = rep2;
 		rep2 = (*next)(rep2->getState());
 	}
-	if (showRemainder) std::cout <<  __FUNCTION__<< ' ' << rep->getState()->substr(0) << std::endl;
+	//if (showRemainder) std::cout <<  __FUNCTION__<< ' ' << rep->getState()->substr(0) << std::endl;
 	if (ast->size())
 		return std::make_shared<ParseResult>(rep->getState(), ast);
 	return std::make_shared<ParseResult>(rep->getState(), firstAST);
