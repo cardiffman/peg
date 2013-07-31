@@ -150,18 +150,20 @@ I don't think GHC uses a PEG to parse Haskell. A [report](http://www.dmst.aueb.g
 from the early 90's on
 a Haskell implementation project done for a master's degree used a custom lexer
 driving a layout layer into a yacc parser and barely managed (as I would 
-describe it) to parse Haskell in that LALR(1) framework. I wrote part of a parser in C++ in recursive descent
-and the syntax part was looking very tedious. It did recognize a couple of 
-Haskell fragments that did not originate with me, but there were a lot of 
-productions left to do and some of them didn't look amenable to classic 
-recursive descent. 
+describe it) to parse Haskell in that LALR(1) framework. I wrote part of a 
+parser in C++ in recursive descent and the syntax part was looking very 
+tedious. It did recognize a couple of Haskell fragments that did not originate 
+with me, but there were a lot of productions left to do and some of them didn't 
+look amenable to classic recursive descent. 
 
-Why write a Haskell implementation? Why did Frege write Begriffsschrift? I've
+Why write a Haskell implementation? Why did Frege write Begriffsschrift? Well 
+obviously Frege was doing something much more original than this work. I've
 done two Scheme implementations, the compiler somewhat less complete than the
 interpreter that the compiler ran on. I am ultimately interested in much more 
 dynamic programs than compilers. The programs I am interested in are usually 
 considered far too dynamic and demanding to be implemented in languages other 
 than C or C++, but I want to explore the space at its frontier instead of its 
-cozy interior.
+cozy interior. Eventually I will most likely turn to compilers maintained by
+others when I get back to writing these dynamic programs.
 
 This code has been compiled with VS Express 2010 and with GCC 4.5.3.
