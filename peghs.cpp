@@ -1225,7 +1225,7 @@ void hs(string& input)
 						        ;
 	auto guards = (SequenceName("guards") && make_shared<tch<'|'>>() && Repeat1("guard+",guard));
 	auto gdpat = Repeat1("gdpatr",(SequenceName("gdpat") && guards && fnTo && expRef));
-	auto alt = ChoicesName("alt") || (SequenceName("pat<-exp") && patRef && patFrom && expRef && Optional(wheres))
+	auto alt = ChoicesName("alt") || (SequenceName("pat->exp") && patRef && fnTo && expRef && Optional(wheres))
 										   || (SequenceName("pat gdpat") && patRef && gdpat && Optional(wheres))
 											;
 	auto alts = RLoop2("altSemiAlt",alt,semicolon);
@@ -1241,7 +1241,7 @@ void hs(string& input)
 						||(ChoicesName("lexp-kw")
 							||(SequenceName("let") && lets && inKw && expRef)
 							||(SequenceName("if") && ifKw && expRef && Optional(semicolon) && (SequenceName("ifthen") && thenKw && expRef && Optional(semicolon)) && (SequenceName("ifelse") && elseKw && expRef))
-							||(SequenceName("case") && caseKw && expRef && ofKw && alts)
+							||(SequenceName("case") && caseKw && expRef && ofKw && lbrace && alts && rbrace)
 							||(SequenceName("do") && doKw && lbrace && stmts && rbrace))
 						||fexpRef
 						;
