@@ -1382,30 +1382,36 @@ void hs(string& input)
 				|| expRef
 				;
 	auto isntminus = Isnt(minus);
-	auto isntqcon = Isnt(qcon);
+	auto fieldbindings = SequenceName("fieldbindings") && lbrace && RLoop("fbind,",fbind,comma) && rbrace;
+	// All the forms of expression except the labeled ones
+	auto aexpbutqcon = ChoicesName("aexp<qcon>")
+					|| qvar
+					|| gcon
+					|| hliteral
+					|| (SequenceName("(exp,exp)") && lparen && expRefComma && rparen)
+					|| (SequenceName("(exp)") && lparen && expRef && rparen)
+					|| (SequenceName("[exp,exp..exp]") && lbracket && expRef && Optional((SequenceName(",exp") && comma && expRef)) && dotdot && expRef && rbracket)
+					|| (SequenceName("[exp,exp]") && lbracket && expRefComma && rbracket)
+					|| (SequenceName("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop("qual,",qual,comma) && rbracket)
+					|| (SequenceName("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
+					|| (SequenceName("(qop<-> infixexp)") && lparen &&isntminus && qop && infixexpRef && rparen)
+					;
+	// An aexp expression can be a "plain old expression"
+	//					or a construction, with or without field names
+	//                  OR a plain old expression referencing another value
+	//                   replacing some of its fields with new values to
+	//                   to make a new value.
+	//  So in order: pt // plain old expression
+	//				or Point{x=1,y=2} // expression constructing with fields (labeled constructor)
+	//              or MkPoint nx ny  // constructing with normal constructor
+	//				OR pt{x=3} // expression resulting in a new Point with different x (labeled update, misnomer)
+	// The aexp production in the Report is wickedly recursive for expository purposes.
+	// The statement here is successful and still divides the labeled update case from the labeled
+	// construction case.
+	//
 	auto aexp = ChoicesName("aexp")
-				|| qvar
-				|| gcon
-				|| hliteral
-				|| (SequenceName("(exp,exp)") && lparen && expRefComma && rparen)
-				|| (SequenceName("(exp)") && lparen && expRef && rparen)
-				||(SequenceName("[exp,exp..exp]") && lbracket && expRef && Optional((SequenceName(",exp") && comma && expRef)) && dotdot && expRef && rbracket)
-				|| (SequenceName("[exp,exp]") && lbracket && expRefComma && rbracket)
-				||(SequenceName("[exp|qual,..]") && lbracket && expRef && vertbar && RLoop("qual,",qual,comma) && rbracket)
-				||(SequenceName("(infixexp qop)") && lparen && infixexpRef && qop && rparen)
-				||(SequenceName("(qop<-> infixexp)") && lparen &&isntminus && qop && infixexpRef && rparen)
-				||(SequenceName("qcon{fbind+}") && qcon && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
-				//||((SequenceName("aexp<qcon>{fbind+}") && isntqcon) && aexp && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
-				//||((SequenceName("aexp<qcon>{fbind+}") && ChoicesName("isntqcon")) && aexp && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
-				//||(SequenceName("aexp<qcon>{fbind+}") && isntqcon && aexpRef && lbrace && Repeat1("fbind+",SkipWhite(fbind)) && rbrace)
-				// So far the recursion here has bit us bad:
-				// First we got compile time problems because we didn't notice the aexp-self-reference.
-				// Then when it was worked around with aexpRef, it was effectively full-on left-recursion
-				// and in fact that's our situation now. It needs to be refactored
-				// probably something like
-				// auto aexp = (my entire current expression except last choice) && Optional(lbrace && fbind+ && rbrace)
-				//  with a little isntqcon action thrown in.
-				//  but for now I want to debug just about anything else.
+				||(SequenceName("aexp{fields}") && aexpbutqcon && Optional(fieldbindings))
+				||(SequenceName("qcon{fields}") && qcon && Optional(fieldbindings))
 				;
 	aexpRef->resolve(aexp);
 	//auto fexp = WSequence(Optional(fexpRef),aexp);
